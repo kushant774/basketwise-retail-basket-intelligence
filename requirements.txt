@@ -17,3 +17,8 @@ nbconvert==7.17.2
 
 # tests
 pytest==9.2.0
+
+# indirect dependencies that affect results, pinned for reproducibility
+scipy==1.18.1          # used by mlxtend
+scikit-learn==1.9.1    # used by mlxtend
+pyarrow==26.0.1        # pandas string columns; used by streamlit

@@ -1,3 +1,18 @@
+[project]
+name = "basketwise"
+version = "1.1.0"
+description = "Retail basket intelligence: association rules, explainable recommendations, bundle ideas and offline evaluation."
+readme = "README.md"
+requires-python = ">=3.12"  # the pinned NumPy, SciPy and NetworkX versions need 3.12 or newer
+# Dependencies are pinned in requirements.txt: pip install -r requirements.txt
+
+[tool.setuptools]
+packages = ["market_basket"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"

@@ -1,0 +1,3 @@
+# Keep the generated datasets byte-identical to scripts/generate_data.py output on every platform
+# (the generator writes LF line endings; Windows would otherwise check them out with CRLF).
+*.csv text eol=lf
