@@ -56,8 +56,8 @@ The screenshots were captured from the running app with headless Chrome. The Dat
 You need Python 3.12 or newer, because the pinned NumPy, SciPy and NetworkX versions require it. It was tested with Python 3.13 on Windows.
 
 ```powershell
-git clone https://github.com/kushant774/Market-Basket-Analysis-Data-Analytics-.git
-cd Market-Basket-Analysis-Data-Analytics-
+git clone https://github.com/kushant774/basketwise-retail-basket-intelligence.git
+cd basketwise-retail-basket-intelligence
 py -3.13 -m venv .venv
 .venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\streamlit run app.py
