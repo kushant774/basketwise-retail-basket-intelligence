@@ -77,3 +77,28 @@ def test_small_dataset_does_not_crash():
 def test_no_evaluable_cases_raises_a_clear_error():
     with pytest.raises(ValueError, match="two or more products"):
         evaluate([["a"], ["b"], ["a", "b"], ["c"]], MiningConfig(min_support=0.2), n_splits=1, test_size=0.25, seed=0)
+
+
+# ---------------------------------------------------------------- release regressions (C2)
+
+
+def test_exclusions_apply_to_every_method_and_to_the_cases(demo):
+    config = MiningConfig(exclude=("Milk",))
+    train, test = train_test_split(demo.transactions, 0.2, 42)
+    methods = build_methods(train, config)
+    for recommender in methods.values():
+        for query, _ in list(leave_one_out_cases(test, config.exclude))[:300]:
+            assert "Milk" not in [rec.product for rec in recommender.recommend(query, top_n=5)]
+    assert all(hidden != "Milk" for _, hidden in leave_one_out_cases(test, config.exclude))
+    with_milk = sum(1 for _ in leave_one_out_cases(test))
+    without_milk = sum(1 for _ in leave_one_out_cases(test, config.exclude))
+    assert without_milk == with_milk - sum("Milk" in basket for basket in test if len(basket) >= 2)
+
+
+def test_evaluation_with_exclusions_runs_and_stays_comparable(demo):
+    result = evaluate(demo.transactions, MiningConfig(exclude=("Milk", "Bread")), n_splits=1)
+    summary = result.summary.set_index("method")
+    assert summary["cases"].nunique() == 1  # every method is scored on exactly the same cases
+    assert summary.loc[METHODS[0], "availability"] == 1.0
+    baseline = evaluate(demo.transactions, MiningConfig(), n_splits=1).summary.set_index("method")
+    assert summary.loc[METHODS[0], "cases"] < baseline.loc[METHODS[0], "cases"]

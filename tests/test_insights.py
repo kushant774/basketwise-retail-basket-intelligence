@@ -87,3 +87,35 @@ def test_every_chart_renders_including_empty_inputs(demo):
     assert all(isinstance(figure, go.Figure) for figure in figures)
     colors = plots.category_colors(["b", "a", "c"])
     assert colors == {"a": plots.CATEGORICAL[0], "b": plots.CATEGORICAL[1], "c": plots.CATEGORICAL[2]}
+
+
+# ---------------------------------------------------------------- release regressions (C2, I2)
+
+
+def test_bundles_and_insights_leave_out_excluded_products(demo):
+    config = MiningConfig(exclude=("Shampoo", "Milk"))
+    result = mine_rules(demo.transactions, config)
+    support = item_support(demo.transactions)
+    bundles = bundle_opportunities(result, support, demo.categories, top_n=500)
+    assert len(bundles) > 0
+    assert not bundles["products"].str.contains("Shampoo|Milk").any()
+    unfiltered = bundle_opportunities(mine_rules(demo.transactions), support, demo.categories, top_n=1)
+    assert unfiltered.loc[0, "products"] == "Conditioner + Shampoo"  # the top bundle without exclusions
+    notes = " ".join(key_insights(demo, result, product_popularity(demo), bundles))
+    assert "Most cohesive bundle: Conditioner + Shampoo" not in notes
+
+
+def test_only_sets_bought_together_more_often_than_chance_are_bundles():
+    # 200 baskets. Milk 120, Bread 120, both 60: lift = 0.30 / (0.6 * 0.6) = 0.83, LESS often than chance,
+    # although its all-confidence (0.5) is high. Pasta 20, Sauce 15, both 15: lift = 0.075 / (0.1 * 0.075) = 10.
+    baskets = ([["Milk", "Bread"]] * 60 + [["Milk"]] * 60 + [["Bread"]] * 60
+               + [["Pasta", "Sauce"]] * 15 + [["Pasta"]] * 5)
+    support = item_support(baskets)
+    assert (support["Milk"], support["Bread"]) == (pytest.approx(0.6), pytest.approx(0.6))
+    for min_lift in (0.0, 1.0, 1.2):
+        result = mine_rules(baskets, MiningConfig(min_support=0.05, min_confidence=0.0, min_lift=min_lift))
+        bundles = bundle_opportunities(result, support, top_n=50)
+        assert set(bundles["products"]) == {"Pasta + Sauce"}  # Bread + Milk (lift 0.83) is never offered
+        assert (bundles["lift vs independence"] > 1).all()
+    strict = mine_rules(baskets, MiningConfig(min_support=0.05, min_confidence=0.0, min_lift=11.0))
+    assert bundle_opportunities(strict, support).empty  # the configured minimum lift is applied too

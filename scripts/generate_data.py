@@ -18,23 +18,35 @@ from market_basket.config import DEMO_DATA_PATH  # noqa: E402
 from market_basket.synthetic_data import CATALOG, add_data_quality_issues, generate_transactions  # noqa: E402
 
 
-def main() -> None:
+def main() -> int:
     parser = argparse.ArgumentParser(description="Generate the synthetic BasketWise demo dataset.")
     parser.add_argument("--transactions", type=int, default=8000, help="number of transactions (default 8000)")
     parser.add_argument("--products", type=int, default=None,
                         help=f"number of products, 8 to {len(CATALOG)} (default: all {len(CATALOG)})")
-    parser.add_argument("--seed", type=int, default=42, help="random seed (default 42)")
+    parser.add_argument("--seed", type=int, default=42, help="random seed, 0 or more (default 42)")
     parser.add_argument("--output", type=Path, default=DEMO_DATA_PATH, help="CSV file to write")
     parser.add_argument("--with-issues", action="store_true",
                         help="add known data-quality problems (for demonstrating validation)")
     args = parser.parse_args()
+    if args.products is not None and not 8 <= args.products <= len(CATALOG):
+        parser.error(f"--products must be between 8 and {len(CATALOG)}, got {args.products}")
+    if args.transactions < 1:
+        parser.error(f"--transactions must be at least 1, got {args.transactions}")
+    if args.seed < 0:
+        parser.error(f"--seed must be 0 or more, got {args.seed}")
+    if args.output.suffix.lower() != ".csv":
+        parser.error(f"--output must be a .csv file, got {args.output}")
 
-    data = generate_transactions(n_transactions=args.transactions, n_products=args.products, seed=args.seed)
-    issues = {}
-    if args.with_issues:
-        data, issues = add_data_quality_issues(data, seed=args.seed)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    data.to_csv(args.output, index=False, lineterminator="\n")
+    try:
+        data = generate_transactions(n_transactions=args.transactions, n_products=args.products, seed=args.seed)
+        issues = {}
+        if args.with_issues:
+            data, issues = add_data_quality_issues(data, seed=args.seed)
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        data.to_csv(args.output, index=False, lineterminator="\n")
+    except (ValueError, OSError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
     basket_sizes = data.groupby("transaction_id").size()
     print(f"Wrote {args.output} (synthetic data, seed {args.seed})")
     print(f"  rows (transaction lines): {len(data):,}")
@@ -49,7 +61,8 @@ def main() -> None:
         print("   should report exactly the injected problems below)")
     for problem, count in issues.items():
         print(f"  injected {problem + ':':<26}{count:,}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

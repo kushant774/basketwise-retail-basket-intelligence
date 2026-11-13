@@ -96,3 +96,40 @@ def test_tables_for_display():
     assert list(comparison.columns) == ["ranked by confidence", "ranked by lift", "ranked by support"]
     assert comparison.loc[1, "ranked by lift"] == "Cheese"
     assert comparison.loc[4, "ranked by confidence"] == "Milk (best seller)"
+
+
+# ---------------------------------------------------------------- release regressions (C2)
+
+
+def test_excluded_products_are_never_recommended_including_the_best_seller_fallback(demo):
+    from market_basket.config import MiningConfig
+
+    config = MiningConfig(exclude=("Milk",))
+    rules = mine_rules(demo.transactions, config).rules
+    best_sellers = item_support(demo.transactions)
+    assert best_sellers.index[0] == "Milk"  # Milk is the top best seller, so it would be the first fallback
+    recommender = Recommender(rules, "confidence", best_sellers, config.exclude)
+    for basket in (["Pasta"], [], ["Bread"], ["Shampoo", "Conditioner"]):
+        assert "Milk" not in products(recommender.recommend(basket, top_n=10))
+    for metric in ("confidence", "lift", "support"):
+        assert "Milk" not in products(Recommender(rules, metric, best_sellers, ["Milk"]).recommend(["Pasta"], 10))
+    comparison = compare_rankings(rules, ["Pasta"], best_sellers, top_n=10, exclude=["Milk"])
+    assert not comparison.apply(lambda column: column.str.startswith("Milk")).any().any()
+
+
+def test_several_exclusions_and_an_empty_candidate_set():
+    recommender = Recommender(RULES, best_sellers=BEST_SELLERS, exclude=["Sauce", "Milk"])
+    assert products(recommender.recommend(["Pasta"], top_n=10)) == ["Cheese", "Wine", "Eggs"]
+    everything = ["Sauce", "Cheese", "Wine", "Basil", "Butter", "Milk", "Eggs"]
+    assert Recommender(RULES, best_sellers=BEST_SELLERS, exclude=everything).recommend(["Pasta"], 5) == []
+    assert Recommender(RULES, best_sellers=BEST_SELLERS, exclude=everything).recommend([], 5) == []
+
+
+def test_rules_that_mention_an_excluded_product_are_not_used_even_if_given():
+    # a rule whose condition contains an excluded product is skipped too
+    recommender = Recommender(RULES, exclude=["Sauce"])
+    assert "Basil" not in products(recommender.recommend(["Pasta", "Sauce"], top_n=10))
+
+
+def test_a_basket_given_as_one_string_is_one_product():
+    assert products(Recommender(RULES).recommend("Pasta")) == ["Sauce", "Cheese", "Wine"]

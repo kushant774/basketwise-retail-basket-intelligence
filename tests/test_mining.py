@@ -118,7 +118,8 @@ def test_invalid_config_raises(kwargs):
 def test_rank_rules_orders_and_validates(toy):
     rules = mine_rules(toy, ALL_RULES).rules
     for metric in ("confidence", "support", "lift"):
-        assert rank_rules(rules, metric)[metric].is_monotonic_decreasing
+        # ordered by the metric; values equal up to the documented tolerance count as ties
+        assert rank_rules(rules, metric)[metric].round(mining.RANK_DECIMALS).is_monotonic_decreasing
     assert rank_rules(rules, "confidence").equals(rank_rules(rules.sample(frac=1, random_state=1), "confidence"))
     with pytest.raises(ValueError):
         rank_rules(rules, "popularity")
@@ -131,3 +132,97 @@ def test_explanations_and_readable_text(toy):
     table = readable(mine_rules(toy, ALL_RULES).rules)
     assert table["antecedents"].map(type).eq(str).all()
     assert "Diapers, Milk" in set(table["antecedents"])
+
+
+# ---------------------------------------------------------------- release regressions (I9, I11)
+
+
+def _rules_table(rows):
+    import pandas as pd
+
+    columns = ["antecedents", "consequents", "antecedent support", "consequent support", "support", "confidence",
+               "lift", "leverage", "conviction"]
+    return pd.DataFrame([(frozenset(a), frozenset(c), 0.1, 0.1, s, conf, lift, 0.0, 1.0)
+                         for a, c, s, conf, lift in rows], columns=columns)
+
+
+def test_reverse_rules_with_float_noise_in_lift_are_ties_broken_by_confidence():
+    # The lift of A -> B and B -> A is mathematically equal but mlxtend computes it in two ways, so the
+    # last digits can differ (these two values come from the demo upload's Cheese/Pasta/Pasta Sauce rules).
+    rules = _rules_table([
+        ({"Pasta Sauce"}, {"Cheese", "Pasta"}, 0.022, 0.309353, 13.837753677654892),
+        ({"Cheese", "Pasta"}, {"Pasta Sauce"}, 0.022, 0.641791, 13.83775367765489),
+    ])
+    ranked = rank_rules(rules, "lift")
+    assert ranked.loc[0, "confidence"] == 0.641791  # the more reliable direction comes first
+    assert rank_rules(rules.iloc[::-1], "lift").equals(ranked)  # independent of the input order
+
+
+def test_real_lift_differences_are_still_respected():
+    rules = _rules_table([
+        ({"A"}, {"B"}, 0.1, 0.9, 2.0),
+        ({"C"}, {"D"}, 0.1, 0.1, 2.000001),  # a real (if small) difference beats a higher confidence
+    ])
+    assert rank_rules(rules, "lift").loc[0, "antecedents"] == frozenset({"C"})
+
+
+def test_walkthrough_rule_for_pasta_is_the_more_reliable_direction():
+    from market_basket.config import PROJECT_ROOT
+    from market_basket.data import load_transactions
+
+    data = load_transactions(PROJECT_ROOT / "Data" / "demo_upload_with_issues.csv")
+    table = readable(rank_rules(mine_rules(data.transactions).rules, "lift"))
+    pasta = table[table["antecedents"].str.contains("Pasta") | table["consequents"].str.contains("Pasta")]
+    first = pasta.iloc[0]
+    assert (first["antecedents"], first["consequents"]) == ("Cheese, Pasta", "Pasta Sauce")
+    assert round(first["confidence"], 3) == 0.642
+
+
+def test_itemset_estimate_is_an_upper_bound(demo):
+    basket = encode(demo.transactions)
+    for support, max_len in [(0.002, 2), (0.002, None), (0.01, 3), (0.05, None)]:
+        actual = len(find_frequent_itemsets(basket, MiningConfig(min_support=support, max_len=max_len)))
+        assert mining.estimate_itemsets(basket, support, max_len) >= actual
+
+
+def test_dense_data_is_refused_before_mining_starts(monkeypatch):
+    dense = [[f"P{i}" for i in range(20)] for _ in range(500)]  # 2^20 possible itemsets
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("mining started although the settings are too large")
+
+    monkeypatch.setattr(mining, "fpgrowth", must_not_run)
+    with pytest.raises(ValueError, match="checked before mining"):
+        mine_rules(dense, MiningConfig(min_support=0.002, max_len=None))
+    monkeypatch.undo()
+    result = mine_rules(dense, MiningConfig(min_support=0.002, max_len=3))  # a size limit makes it safe
+    assert len(result.frequent_itemsets) == 20 + 190 + 1140
+
+
+def test_the_guard_never_refuses_settings_the_app_offers_on_the_demo_data(demo):
+    for support in (0.002, 0.01):
+        for max_len in (2, 3, 4, None):
+            mine_rules(demo.transactions, MiningConfig(min_support=support, max_len=max_len))
+
+
+def test_too_many_candidate_rules_raise_before_rule_generation(demo, monkeypatch):
+    monkeypatch.setattr(mining, "MAX_RULE_CANDIDATES", 100)
+    with pytest.raises(ValueError, match="candidate rules"):
+        mine_rules(demo.transactions, MiningConfig())
+
+
+@pytest.mark.parametrize("kwargs", [{"min_support": float("nan")}, {"min_confidence": float("nan")},
+                                    {"min_lift": float("nan")}, {"min_lift": float("inf")}, {"min_support": "0.1"}])
+def test_config_rejects_non_finite_or_non_numeric_thresholds(kwargs):
+    with pytest.raises(ValueError, match="finite number"):
+        MiningConfig(**kwargs)
+
+
+def test_a_single_excluded_product_given_as_text_is_not_split_into_letters():
+    assert MiningConfig(exclude="Milk").exclude == ("Milk",)
+
+
+def test_product_names_with_commas_stay_unambiguous():
+    assert mining.as_text({"Bread, White", "Milk"}) == '"Bread, White", Milk'
+    assert mining.as_text({"Bread", "White", "Milk"}) == "Bread, Milk, White"
+    assert mining.join_names({"Rice, Basmati", "Dal"}) == 'Dal and "Rice, Basmati"'

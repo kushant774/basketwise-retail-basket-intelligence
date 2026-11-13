@@ -1,3 +1,5 @@
+import pytest
+
 from market_basket.cli import main
 
 
@@ -49,3 +51,58 @@ def test_insights_evaluate_and_report(tmp_path, capsys):
     assert "Best-seller baseline" in capsys.readouterr().out
     assert main(["report", "--output-dir", str(tmp_path), "--splits", "0"]) == 0
     assert (tmp_path / "report.md").exists() and (tmp_path / "basketwise_export.zip").exists()
+
+
+# ---------------------------------------------------------------- release regressions
+
+
+def test_recommend_never_suggests_an_excluded_product(capsys):
+    assert main(["recommend", "Pasta", "--exclude", "Milk", "--top", "8"]) == 0
+    out = capsys.readouterr().out
+    lines = [line for line in out.splitlines() if not line.startswith("Basket:")]
+    assert "ignoring: Milk" in out and not any("Milk" in line for line in lines)
+    assert main(["recommend", "--exclude", "milk", "--exclude", "Bread", "--top", "3"]) == 0  # empty basket
+    out = capsys.readouterr().out.split("\n", 1)[1]
+    assert "Milk" not in out and "Bread" not in out and "best seller" in out
+
+
+def test_insights_leave_out_excluded_products(capsys):
+    assert main(["insights", "--exclude", "Shampoo", "--top", "20"]) == 0
+    assert "Shampoo" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("argv", [["rules", "--min-lift", "nan"], ["rules", "--min-support", "inf"],
+                                  ["summary", "--top", "-3"], ["evaluate", "--splits", "0"],
+                                  ["summary", "--min-support", "0.5"]])
+def test_invalid_numbers_and_misplaced_options_are_usage_errors(argv):
+    with pytest.raises(SystemExit) as stop:
+        main(argv)
+    assert stop.value.code == 2
+
+
+def test_removed_output_is_written_even_when_nothing_was_removed(tmp_path, capsys):
+    target = tmp_path / "removed.csv"
+    assert main(["validate", "--removed-output", str(target)]) == 0
+    assert "No rows were removed" in capsys.readouterr().out
+    assert target.read_text(encoding="utf-8").startswith("file_row,transaction_id,product_name,reason")
+
+
+def test_report_on_the_demo_upload_keeps_the_synthetic_disclaimer(tmp_path, capsys):
+    from market_basket.config import PROJECT_ROOT
+
+    source = PROJECT_ROOT / "Data" / "demo_upload_with_issues.csv"
+    assert main(["report", "--data", str(source), "--output-dir", str(tmp_path), "--splits", "0"]) == 0
+    assert "synthetic data, not real customers or sales" in (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert main(["summary", "--data", str(source)]) == 0
+    assert "(synthetic)" in capsys.readouterr().out
+
+
+def test_folder_given_as_data_is_a_clear_error(tmp_path, capsys):
+    assert main(["summary", "--data", str(tmp_path)]) == 2
+    assert "is a folder" in capsys.readouterr().err
+
+
+def test_too_large_settings_are_refused_with_a_clear_message(capsys):
+    assert main(["rules", "--min-support", "0.0002", "--max-len", "0", "--min-lift", "0",
+                 "--min-confidence", "0"]) == 2  # would otherwise build about 500,000 rules
+    assert "Raise the minimum support" in capsys.readouterr().err

@@ -9,15 +9,20 @@ Protocol
 4. A method scores a hit at k if the hidden product is among its top k recommendations.
 5. Repeat for several random splits and report the mean and standard deviation.
 
+Excluded products (MiningConfig.exclude) are treated the same way by every method: no method
+may recommend them, cases whose hidden product is excluded are skipped, and they are left out of
+the coverage denominator. Without exclusions (the default) every product counts.
+
 Metrics
 -------
 hit rate@k:   hits / evaluated cases
 availability: share of cases where the method returned at least one recommendation
-coverage:     share of training products that the method recommended at least once
+coverage:     share of (non-excluded) training products that the method recommended at least once
 """
 from __future__ import annotations
 
 import random
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
 import pandas as pd
@@ -52,34 +57,39 @@ def train_test_split(transactions: list[list[str]], test_size: float = 0.2,
     return [transactions[i] for i in order[:cut]], [transactions[i] for i in order[cut:]]
 
 
-def leave_one_out_cases(test: list[list[str]]):
-    """Yield (query basket, hidden product) for every product of every test basket with 2+ products."""
+def leave_one_out_cases(test: list[list[str]], exclude: Iterable[str] = ()) -> Iterator[tuple[list[str], str]]:
+    """Yield (query basket, hidden product) for every product of every test basket with 2+ products.
+    Excluded products are never hidden (no method is allowed to recommend them)."""
+    excluded = frozenset(exclude)
     for basket in test:
         if len(basket) < 2:
             continue
         for hidden in basket:
+            if hidden in excluded:
+                continue
             yield [item for item in basket if item != hidden], hidden
 
 
 def build_methods(train: list[list[str]], config: MiningConfig) -> dict[str, Recommender]:
-    """Recommenders built from training transactions only."""
+    """Recommenders built from training transactions only; all of them respect config.exclude."""
     rules = mine_rules(train, config).rules
     best_sellers = item_support(train)
+    exclude = config.exclude
     return {
-        "Best-seller baseline": Recommender(rules.iloc[0:0], "confidence", best_sellers),
-        "Rules ranked by confidence": Recommender(rules, "confidence"),
-        "Rules ranked by lift": Recommender(rules, "lift"),
-        "Rules by confidence + best-seller fallback": Recommender(rules, "confidence", best_sellers),
+        "Best-seller baseline": Recommender(rules.iloc[0:0], "confidence", best_sellers, exclude),
+        "Rules ranked by confidence": Recommender(rules, "confidence", exclude=exclude),
+        "Rules ranked by lift": Recommender(rules, "lift", exclude=exclude),
+        "Rules by confidence + best-seller fallback": Recommender(rules, "confidence", best_sellers, exclude),
     }
 
 
 def score(recommender: Recommender, test: list[list[str]], ks: tuple[int, ...] = (3, 5),
-          catalog_size: int | None = None) -> dict[str, float]:
+          catalog_size: int | None = None, exclude: Iterable[str] = ()) -> dict[str, float]:
     ks = tuple(sorted(ks))
     cases = available = 0
     hits = dict.fromkeys(ks, 0)
     recommended: dict[str, None] = {}
-    for query, hidden in leave_one_out_cases(test):
+    for query, hidden in leave_one_out_cases(test, exclude):
         products = [rec.product for rec in recommender.recommend(query, top_n=ks[-1])]
         cases += 1
         available += bool(products)
@@ -87,7 +97,8 @@ def score(recommender: Recommender, test: list[list[str]], ks: tuple[int, ...] =
         for k in ks:
             hits[k] += hidden in products[:k]
     if cases == 0:
-        raise ValueError("The test set has no transaction with two or more products to evaluate.")
+        raise ValueError("The test set has no transaction with two or more products to evaluate "
+                         "(excluded products are not evaluated).")
     result = {"cases": cases}
     result.update({f"hit rate@{k}": hits[k] / cases for k in ks})
     result["availability"] = available / cases
@@ -104,10 +115,10 @@ def evaluate(transactions: list[list[str]], config: MiningConfig | None = None, 
     rows = []
     for split in range(n_splits):
         train, test = train_test_split(transactions, test_size, seed + split)
-        catalog_size = len({item for basket in train for item in basket})
+        catalog_size = len({item for basket in train for item in basket} - set(config.exclude))
         for method, recommender in build_methods(train, config).items():
             rows.append({"split": split + 1, "method": method,
-                         **score(recommender, test, ks, catalog_size)})
+                         **score(recommender, test, ks, catalog_size, config.exclude)})
     per_split = pd.DataFrame(rows)
     metrics = [column for column in per_split.columns if column not in ("split", "method")]
     by_method = per_split.groupby("method", sort=False)

@@ -7,6 +7,7 @@ from datetime import datetime
 
 import pandas as pd
 
+from .config import ALGORITHM_NAMES
 from .data import TransactionData, item_support, summarize
 from .evaluation import EvaluationResult
 from .insights import (
@@ -64,9 +65,11 @@ def build_report(data: TransactionData, result: MiningResult, evaluation: Evalua
         "",
         "## Mining settings",
         "",
-        f"Algorithm {config.algorithm}; minimum support {config.min_support}; minimum confidence "
-        f"{config.min_confidence}; minimum lift {config.min_lift}; maximum itemset size {config.max_len or 'no limit'}"
-        + (f"; excluded products: {', '.join(config.exclude)}" if config.exclude else "") + ".",
+        f"Algorithm {ALGORITHM_NAMES[config.algorithm]} (mlxtend); minimum support {config.min_support:.2%}; "
+        f"minimum confidence {config.min_confidence:.0%}; minimum lift {config.min_lift:.2f}; maximum products per "
+        f"rule {config.max_len or 'no limit'}"
+        + (f"; ignored products (left out of rules, recommendations and bundles): {', '.join(config.exclude)}"
+           if config.exclude else "") + ".",
         f"Result: {len(result.frequent_itemsets):,} frequent itemsets and {len(result.rules):,} rules.",
         "",
         f"## Top {top_n} rules by lift",
@@ -112,7 +115,8 @@ def build_report(data: TransactionData, result: MiningResult, evaluation: Evalua
             f"{s['n_splits']} random splits, {1 - s['test_size']:.0%} train / {s['test_size']:.0%} test, seeds "
             f"{s['seed']}-{s['seed'] + s['n_splits'] - 1}. In every test transaction with two or more products, "
             "each product is hidden in turn and the methods recommend from the rest; a hit means the hidden "
-            "product appears in the top k. Rules and best sellers come from the training split only.",
+            "product appears in the top k. Rules and best sellers come from the training split only. Three "
+            "recommendation methods are compared with a best-seller baseline.",
             "",
             markdown_table(evaluation.summary, digits=4),
             "",

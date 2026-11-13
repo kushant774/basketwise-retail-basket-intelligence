@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from .data import TransactionData
+from .data import TransactionData, transaction_dates
 from .insights import cross_sell_opportunities
 
 BLUE = "#2a78d6"
@@ -101,7 +101,7 @@ def basket_size_chart(data: TransactionData) -> go.Figure:
 def weekly_transactions_chart(data: TransactionData) -> go.Figure | None:
     if "transaction_date" not in data.items:
         return None
-    dates = pd.to_datetime(data.items.drop_duplicates("transaction_id")["transaction_date"], errors="coerce").dropna()
+    dates = transaction_dates(data.items.drop_duplicates("transaction_id")).dropna()
     if dates.empty:
         return None
     weekly = dates.dt.to_period("W").dt.start_time.value_counts().sort_index()
@@ -140,7 +140,7 @@ def _grid_layout(graph: nx.Graph) -> dict[str, np.ndarray]:
         points = points - points.mean(axis=0)
         scale = np.abs(points).max() or 1.0
         offset = np.array([index % columns, -(index // columns)], dtype=float)
-        for node, point in zip(local, points):
+        for node, point in zip(local, points, strict=True):
             positions[node] = offset + 0.36 * point / scale
     return positions
 
@@ -152,7 +152,7 @@ def rule_network(rules: pd.DataFrame, categories: dict[str, str] | None = None, 
     if pairs.empty:
         return _style(fig, "Product relationships (no pairs at these thresholds)")
     graph = nx.Graph()
-    for a, b, lift in zip(pairs["when a basket has"], pairs["suggest"], pairs["lift"]):
+    for a, b, lift in zip(pairs["when a basket has"], pairs["suggest"], pairs["lift"], strict=True):
         graph.add_edge(a, b, lift=float(lift))
     positions = _grid_layout(graph)
     lifts = pairs["lift"].to_numpy()
@@ -183,7 +183,7 @@ def rule_network(rules: pd.DataFrame, categories: dict[str, str] | None = None, 
 
 def evaluation_chart(summary: pd.DataFrame, ks: tuple[int, ...] = (3, 5)) -> go.Figure:
     fig = go.Figure()
-    for k, color in zip(ks, (BLUE, ORANGE)):
+    for k, color in zip(ks, (BLUE, ORANGE)):  # noqa: B905 - at most two cut-offs are charted
         std = summary.get(f"hit rate@{k} std", pd.Series(0, index=summary.index)).fillna(0)
         fig.add_bar(x=summary["method"], y=summary[f"hit rate@{k}"] * 100, name=f"Hit Rate@{k}", marker_color=color,
                     error_y=dict(type="data", array=std * 100, color=MUTED, thickness=1.2),
