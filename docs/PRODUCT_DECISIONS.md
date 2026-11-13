@@ -24,10 +24,10 @@ Each entry records a decision made while building the current version: the reaso
 ## 3. Default algorithm: FP-Growth
 
 - **Decision:** FP-Growth is the default and Apriori is selectable.
-- **Evidence (`scripts/benchmark.py`):**
-  - At the default settings on the 47-product catalogue, Apriori was slightly faster: 0.38 s vs 0.59 s at 120,000 transactions.
-  - At a low minimum support of 0.2 %, with 1,741 itemsets, FP-Growth was 2.5× faster on the dense matrix and 7× faster on the sparse one.
-- **Why:** both are fast at the defaults, and FP-Growth degrades far less when users lower the thresholds, which is the risky case. The in-app help text states this trade-off.
+- **Evidence (`scripts/benchmark.py`, one laptop; timings vary between computers):**
+  - At the app's default settings (support 1 %, at most 3 products) on the 47-product catalogue, Apriori was faster on the dense matrix (0.40 s vs 0.88 s at 120,000 transactions) and about equal on the sparse one.
+  - At a low minimum support of 0.2 % with no size limit (1,741 itemsets, 40,000 transactions), FP-Growth was 2.4× faster on the dense matrix and 6.8× faster on the sparse one.
+- **Why:** both take under a second at the defaults, and FP-Growth degrades far less when users lower the thresholds, which is the risky case. The in-app help text states this trade-off.
 
 ## 4. Generate synthetic demo data
 
@@ -49,6 +49,7 @@ Each entry records a decision made while building the current version: the reaso
 - **Reasoning:**
   - Confidence directly estimates "how often customers with this basket also bought the product".
   - Lift favours rare pairings: a niche product can have high lift but low confidence. That is useful for discovering cross-sell ideas, so lift remains available for that purpose and in the rule explorer.
+- **Caveat:** this choice was made by looking at the evaluation on the same demo data, so the reported lead of the default method is slightly optimistic (a selection effect). The app and the evaluation report say so.
 
 ## 7. Best sellers as a labelled fallback
 
@@ -63,11 +64,12 @@ Each entry records a decision made while building the current version: the reaso
 - **Decision:** show the supporting rule's antecedent, consequent, support, confidence and lift, plus a sentence such as "Customers whose basket contained Bread and Milk also bought Butter in 41% of those transactions (3.8x its usual rate) in the observed data."
 - **Why:** a merchandiser will not act on a black-box suggestion. The explanation lets them sanity-check the pattern. The wording describes observations only, never promised sales.
 
-## 9. Bundles ranked by all-confidence, not lift
+## 9. Bundles: filtered by lift, ranked by all-confidence
 
-- **Decision:** rank bundle candidates (pairs and triples) by all-confidence, the support of the set divided by the largest single-product support in it.
+- **Decision:** offer only sets whose lift against independence is above 1 and at least the minimum lift setting, then rank them (pairs and triples) by all-confidence, the support of the set divided by the largest single-product support in it.
 - **Why:**
-  - Lift against full independence grows mechanically with set size, so triples would always look better than pairs.
+  - All-confidence ignores how often products would meet by chance, so on its own it can rank two very popular but unrelated (or even negatively associated) products highly. An audit showed a pair with lift 0.92 ranked second on constructed data. The lift filter makes "bought together more often than chance" true.
+  - Lift against full independence grows mechanically with set size, so it is not used for ranking; triples would always look better than pairs.
   - All-confidence means "at least this share of buyers of any product in the set bought the whole set", which is a practical bundle question.
 
 ## 10. Never drop data silently
@@ -84,3 +86,29 @@ Each entry records a decision made while building the current version: the reaso
 
 - **Decision:** use Python, pandas, NumPy, mlxtend, Plotly, NetworkX and Streamlit. There is no database, cloud, authentication or paid API.
 - **Why:** the target user needs a tool that runs on a laptop with a CSV. Each extra service adds setup cost without solving the core problem.
+
+## 13. "Ignore products" applies to every suggestion, not to sales statistics
+
+- **Decision:** an ignored product (for example a carrier bag) is left out of rules, recommendations (including the best-seller fallback), bundles, cross-sell pairs, merchandising groups and the evaluation. Descriptive statistics (best sellers chart, product frequency table) still include it.
+- **Why:** the point of ignoring a product is that it should never be suggested. Before this was fixed, an ignored best seller still appeared as a "best seller" suggestion in almost every basket. Sales statistics describe what happened, so hiding a product there would misreport the data.
+- **Evaluation:** every method treats ignored products the same way (never recommended, never used as the hidden product), so the comparison stays fair.
+
+## 14. Returns are removed; duplicate lines are added up
+
+- **Decision:** rows with a negative quantity are removed as returns or cancellations, with that reason in the removed-rows download. Several lines for the same product in one transaction are merged and their quantities added.
+- **Why:** counting a returned product as a purchase would invent associations (a cancellation invoice would look like a basket). Duplicate lines are treated as separate scans of the same product, which is how most tills record them; rules only use whether a product is in the basket, so this choice cannot change any rule.
+
+## 15. Ambiguous dates default to day/month/year
+
+- **Decision:** the order of day and month is detected per file; if no date settles it, day/month/year is used and a warning says so.
+- **Why:** the target users are Indian retailers, whose exports use day/month/year. A US file in which no day is above 12 would be misread, which is why the warning is shown. Only the date range and the weekly chart use dates; the rules do not.
+
+## 16. Refuse very large settings before mining, not after
+
+- **Decision:** before mining, compute a guaranteed upper bound on the number of frequent itemsets and refuse settings above 200,000; before rule generation, refuse more than 500,000 candidate rules.
+- **Why:** the earlier check counted itemsets only after mining had finished, so a dense file at the lowest support with no size limit could use more than a gigabyte of memory first. The bound is cheap (it only needs per-product counts and basket sizes), never refuses a setting the app offers on the demo data, and turns a long freeze into an immediate, actionable message.
+
+## 17. Recognise generated data by its IDs
+
+- **Decision:** a file is labelled synthetic when every transaction ID and every customer ID has the generator's format (`SYN-T…`, `SYN-C…`), wherever the file comes from.
+- **Why:** the demo upload is itself generated data, and reports about it must carry the synthetic-data disclaimer. File names are not reliable, and requiring both ID formats in full means real data is not labelled synthetic by accident.

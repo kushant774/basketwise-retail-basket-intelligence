@@ -55,6 +55,8 @@ There are 12 missions:
 
 The planted associations are known ground truth for testing. They are also stronger than typical real retail associations.
 
+**How generated data is recognised.** Every transaction ID (`SYN-T000001`) and customer ID (`SYN-C00001`) follows the generator's format. When a file in which *all* transaction and customer IDs follow it is loaded, from any path or as an upload, BasketWise labels it synthetic, and reports keep the synthetic-data disclaimer. Files without a customer column, or with any other ID, are never labelled synthetic.
+
 Run `python scripts/generate_data.py --transactions N --products P --seed S` to create other variants. P is between 8 and 47; smaller catalogues keep every category represented.
 
 ## Demo upload with known problems: `Data/demo_upload_with_issues.csv`
@@ -80,23 +82,30 @@ Three transactions lose all of their products to blanking, so 2,997 of the 3,000
 
 ## Accepted upload formats
 
-Comma, semicolon, tab and pipe separators are detected from the header row. Trailing empty columns without a header (common in spreadsheet exports) are dropped. Column names are matched case-insensitively, and spaces and symbols in names are treated as underscores.
+Files with the extension `.csv`, `.txt` or `.tsv` are accepted. Comma, semicolon, tab and pipe separators are detected from the header row. Text is read as UTF-8 (with or without a byte-order mark), as UTF-16 when it starts with a UTF-16 byte-order mark, and otherwise as Windows-1252, with Latin-1 as the last resort; a warning names any encoding other than UTF-8. Trailing empty columns without a header (common in spreadsheet exports) are dropped.
+
+Column names are matched after normalising them: case does not matter, CamelCase is split (`InvoiceNo` → `invoice_no`, `CustomerID` → `customer_id`), and spaces and symbols are treated as underscores. If two columns normalise to the same name, the first is used and the other is listed as ignored.
 
 | Role | Accepted column names |
 |---|---|
-| Transaction ID (required in long format) | `transaction_id`, `transaction`, `transaction_no`, `invoice`, `invoice_no`, `invoice_id`, `order_id`, `order`, `basket_id`, `receipt_id`, `bill_no` |
+| Transaction ID (required in long format) | `transaction_id`, `transaction`, `transaction_no`, `invoice`, `invoice_no`, `invoice_id`, `invoice_number`, `order_id`, `order`, `basket_id`, `receipt_id`, `bill_no` |
 | Product (required in long format) | `product_name`, `product`, `item_name`, `item`, `product_description`, `description` |
 | Wide-format items | `item_1`, `item_2`, ... or `product_1`, ... (with or without the underscore) |
-| Optional | `product_id` / `sku` / `item_id`, `category` / `product_category` / `department`, `quantity` / `qty` / `units`, `unit_price` / `price`, `transaction_date` / `date` / `order_date` / `invoice_date`, `customer_id` / `customer` |
+| Optional | `product_id` / `sku` / `item_id` / `stock_code`, `category` / `product_category` / `department`, `quantity` / `qty` / `units`, `unit_price` / `price`, `transaction_date` / `date` / `order_date` / `invoice_date`, `customer_id` / `customer` |
 
-Any other columns are ignored, and a warning lists them.
+The UCI Online Retail headers (`InvoiceNo`, `StockCode`, `Description`, `Quantity`, `InvoiceDate`, `UnitPrice`, `CustomerID`, `Country`) are recognised; `Country` is ignored. Any other columns are ignored, and a warning lists them.
+
+Values treated as missing (in IDs and product names): an empty cell, `nan`, `none`, `null`, `n/a`, `na`, `-`, `#N/A` and `?` (in any capitalisation).
 
 ## Cleaned data (`cleaned_transactions.csv` export)
 
 - There is one row per product per transaction, with the recognised columns above.
-- Product names are trimmed and their internal spaces collapsed.
+- Product names are trimmed, their internal spaces collapsed, and stored in one Unicode form (NFC), so "Café" typed in two different ways is one product.
 - Names that differ only in capitalisation are merged. The most common spelling wins; ties go to Title Case.
-- Duplicate products within a transaction are merged into one row, with their quantities added.
+- Rows with a **negative quantity** are returns or cancellations. They are removed (see below), so a returned product is never counted as a purchase. A zero or unreadable quantity is left empty and the row is kept.
+- Duplicate lines for the same product in one transaction are merged into one row, with their quantities added: each line is treated as a separate scan. Rules only use whether a product is in the basket, so they are not affected.
+- Each product gets one category: its most common non-blank category. A blank category never outvotes a real one; products with no category become `Uncategorised`.
+- `transaction_date` is stored as `yyyy-mm-dd`. Input may be ISO (`2025-01-05`), day/month/year or month/day/year with `/`, `-` or `.` separators, with or without a time. The order of day and month is decided once per file: a first number above 12 means day/month/year, a second number above 12 means month/day/year, and if every date could be either, day/month/year is used and a warning says so. Unreadable dates are left empty, with a warning. The date summary and the weekly chart use these stored dates.
 
 ## Removed rows (`removed_rows.csv` export)
 
@@ -104,7 +113,7 @@ Any other columns are ignored, and a warning lists them.
 |---|---|
 | `file_row` | Line number in the uploaded file (the header is line 1) |
 | `transaction_id`, `product_name` | Values as found, after trimming |
-| `reason` | `missing transaction ID`, `blank product name`, `transaction has no products` or `duplicate product in the same transaction (merged)` |
+| `reason` | `missing transaction ID`, `blank product name`, `return or cancellation (negative quantity)`, `transaction has no products` or `duplicate product in the same transaction (merged)` |
 
 ## Rules (`rules.csv` export)
 
@@ -130,6 +139,8 @@ Any other columns are ignored, and a warning lists them.
 | `lift vs independence` | support(set) / product of the single supports |
 | `categories`, `potential use` | Category mix and a suggested use: shelve together within one category, or a cross-category display or bundle offer |
 
+Only sets whose `lift vs independence` is above 1 and at least the minimum lift setting are listed (sets bought together less often than chance are never offered), and sets containing an ignored product are left out. The listed sets are ranked by `all-confidence`.
+
 ## Evaluation (`evaluation_summary.csv`, `evaluation_per_split.csv`)
 
 | Column | Meaning |
@@ -137,6 +148,6 @@ Any other columns are ignored, and a warning lists them.
 | `cases` | Hidden-product cases per test split (average across splits in the summary) |
 | `hit rate@3`, `hit rate@5` | Share of cases where the hidden product was in the top 3 / top 5 suggestions |
 | `availability` | Share of cases with at least one suggestion |
-| `coverage` | Share of training products that the method recommended at least once |
+| `coverage` | Share of training products (other than ignored products) that the method recommended at least once |
 | `hit rate@k std` | Standard deviation across splits |
 | `splits beating baseline@k` | Number of splits in which the method's hit rate was above the best-seller baseline |

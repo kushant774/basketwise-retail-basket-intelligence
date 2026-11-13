@@ -62,14 +62,14 @@ These are assumptions:
 
 | # | User story | Acceptance criteria | Status |
 |---|---|---|---|
-| 1 | As a shop owner, I want to upload my sales CSV so I can analyse my own data. | Long and wide formats are accepted, with alias column names and comma, semicolon, tab or pipe separators. Invalid files show a clear error and keep the previous dataset. | Implemented (`tests/test_data.py`, `tests/test_app.py`, browser check) |
-| 2 | As an analyst, I want to know what cleaning did to my data. | The validation summary shows rows received, valid transactions, products, removed blanks, removed duplicates, rejected rows and warnings. Removed rows can be downloaded with reasons. A warning appears when more than 5 % of rows are removed. | Implemented |
+| 1 | As a shop owner, I want to upload my sales CSV so I can analyse my own data. | Long and wide formats are accepted, with alias column names (including CamelCase headers such as `InvoiceNo`), comma, semicolon, tab or pipe separators, and UTF-8, UTF-16 or Windows-1252 text. Invalid files show a clear error that stays visible, and the previous dataset is kept. | Implemented (`tests/test_data.py`, `tests/test_app.py`, browser check) |
+| 2 | As an analyst, I want to know what cleaning did to my data. | The validation summary shows rows received, valid transactions, products, removed blanks, returns, duplicates, rejected rows, the encoding and warnings. Removed rows can be downloaded with reasons. A warning appears when more than 5 % of rows are removed, or when dates are ambiguous or unreadable. Returns are never counted as purchases. | Implemented |
 | 3 | As a user without data, I want sample data so I can try the product. | Bundled synthetic data, plus an in-app generator with a fixed seed, a configurable transaction count and a configurable product count. Synthetic data is clearly labelled. | Implemented |
 | 4 | As a manager, I want to see best sellers, slow sellers and categories. | The Product Analytics page shows top and least purchased products, category reach, basket sizes, weekly volume and a frequency table. | Implemented |
-| 5 | As an analyst, I want to tune and explore association rules. | Algorithm, support, confidence, lift, maximum size and product exclusions are configurable. The rule table can be searched and sorted, each rule has a plain-English explanation, rules export to CSV, and an empty state appears when no rules pass. | Implemented |
-| 6 | As a shop owner, I want suggestions for a basket, with reasons. | Products already in the basket are never suggested. Each suggestion shows its reason and supporting rule. Ranking can use confidence, lift or support. Best sellers fill gaps and are labelled. Empty and unknown baskets are handled. | Implemented |
-| 7 | As a merchandiser, I want bundle and grouping ideas. | Bundles are ranked by all-confidence and show their categories and a suggested use. Cross-sell pairs and merchandising groups are included. | Implemented |
-| 8 | As an analyst, I want to know whether recommendations beat best sellers. | Four methods are compared with Hit Rate@3, Hit Rate@5, availability and coverage over repeated seeded splits. There is no train/test leakage, and the methodology and limitations are shown. | Implemented (`tests/test_evaluation.py`) |
+| 5 | As an analyst, I want to tune and explore association rules. | Algorithm, support, confidence, lift, maximum size and ignored products are configurable, and every Apply takes effect at once (including several in a row). The rule table can be searched and sorted, each rule has a plain-English explanation, rules export to CSV, and empty states appear when no rules pass or no rule matches the search. | Implemented (`tests/test_app.py`, browser check) |
+| 6 | As a shop owner, I want suggestions for a basket, with reasons. | Products already in the basket, and ignored products, are never suggested. Each suggestion shows its reason and supporting rule. Ranking can use confidence, lift or support. Best sellers fill gaps and are labelled. Empty and unknown baskets are handled. The basket is kept when moving between pages. | Implemented |
+| 7 | As a merchandiser, I want bundle and grouping ideas. | Bundles are only sets bought together more often than chance (lift above 1 and the minimum lift), ranked by all-confidence, with their categories and a suggested use. Cross-sell pairs and merchandising groups are included. Ignored products never appear. | Implemented |
+| 8 | As an analyst, I want to know whether recommendations beat best sellers. | Three recommendation methods are compared with the best-seller baseline on Hit Rate@3, Hit Rate@5, availability and coverage over repeated seeded splits. There is no train/test leakage, the settings used are shown with the result, and the methodology and limitations (including the selection effect of tuning on the demo data) are shown. | Implemented (`tests/test_evaluation.py`) |
 | 9 | As a manager, I want to share results. | A Markdown report and a ZIP of CSV files (rules, bundles, cleaned data, removed rows, evaluation) can be downloaded. | Implemented (`tests/test_reporting.py`) |
 
 ## Success metrics
@@ -90,9 +90,11 @@ These are proposed and have not been measured; there are no real users yet.
 |---|---|
 | Users read associations as causation | Every explanation says "in the observed data"; the docs and app state that associations are not causation and that A/B testing is needed |
 | Synthetic demo results are mistaken for real-world performance | Synthetic data is labelled everywhere; the evaluation page explains that its associations were planted |
-| Messy real exports fail to load | Alias column names, two layouts, detailed errors and downloadable removed rows |
-| Very low thresholds make mining slow or huge | A slider minimum of 0.2 % support, plus a limit of 200,000 itemsets with a clear message |
-| Popular products dominate suggestions | Ranking options (lift, support), product exclusions, and a baseline comparison that exposes the effect |
+| Messy real exports fail to load | Alias and CamelCase column names, two layouts, encoding detection, detailed errors and downloadable removed rows |
+| Returns are counted as purchases | Rows with a negative quantity are removed with their own reason |
+| Dates are misread (day/month versus month/day) | The order is detected per file; ambiguous files use day/month/year with a warning |
+| Very low thresholds make mining slow or huge | A slider minimum of 0.2 % support; an upper bound on the itemset count is checked before mining (limit 200,000) and the candidate-rule count before rule generation (limit 500,000), each with a clear message |
+| Popular products dominate suggestions | Ranking options (lift, support), ignored products (which also apply to the best-seller fallback), and a baseline comparison that exposes the effect |
 
 ## Future improvements
 

@@ -11,7 +11,7 @@ These answers match the code in this repository. Before an interview, run the ap
 | Community detection for merchandising groups | **NetworkX** library |
 | Charts and app framework | **Plotly**, **Streamlit** |
 | Project code: data validation, synthetic data generator, settings, rule ranking and explanations, recommender and fallback, evaluation framework, insights, reports, app pages, CLI, tests | Written for this project with substantial **AI coding assistance** (Claude Code), directed by my brief; I reviewed the results and am responsible for being able to explain them |
-| Verification | 114 automated tests, a browser walkthrough and a clean-environment install, all run during development; rerun them yourself before relying on them |
+| Verification | 175 automated tests, a browser walkthrough and a clean-environment install, all run during development; rerun them yourself before relying on them |
 
 **An honest one-line version:** "I specified and directed BasketWise and used an AI coding assistant to implement it. The mining algorithms come from mlxtend; the product logic, evaluation and app are this project's own code."
 
@@ -37,7 +37,7 @@ Both find every itemset whose support is above a threshold.
 - **Apriori** grows itemsets one size at a time. It prunes candidates that have an infrequent subset, because every subset of a frequent set must also be frequent.
 - **FP-Growth** compresses the transactions into a prefix tree and mines it without generating candidates.
 
-Both return the same itemsets; the tests check this. In my benchmark, Apriori was slightly faster at the default settings, but FP-Growth was 2.5–7× faster at very low support. That is why FP-Growth is the default.
+Both return the same itemsets; the tests check this. In my benchmark, both took under a second at the app's default settings (Apriori was faster on the dense matrix), but at very low support with no size limit FP-Growth was 2.4–6.8× faster. That is why FP-Growth is the default. Timings depend on the computer.
 
 **7. Why did you use mlxtend?**
 It is a mature, widely used implementation. Rewriting these algorithms would add risk without adding product value. The value is in what surrounds them: validation, explanations, recommendations and evaluation. I verified that the library's metrics are correct with hand calculations and a brute-force recount in the tests.
@@ -62,9 +62,9 @@ Some baskets have no applicable rule. Without a fallback, rules alone produced a
 1. Split the transactions 80/20 at random with a fixed seed.
 2. Mine rules and best sellers on the training part only.
 3. In each test basket with at least two products, hide each product in turn, recommend from the rest, and check whether the hidden product is in the top k.
-4. Repeat on 5 or 10 splits and compare four methods with the best-seller baseline.
+4. Repeat on 5 or 10 splits and compare three recommendation methods with the best-seller baseline.
 
-The tests guard against leakage: they check that mining only ever sees the training data, and that products seen only in the test set are never recommended.
+The tests guard against leakage: they check that mining only ever sees the training data, and that products seen only in the test set are never recommended. One honest caveat: I chose confidence as the default ranking after seeing these results on the same demo data, so its lead over the other rule methods is slightly optimistic. That selection effect is small next to the 20-point gap to the baseline.
 
 **12. What is Hit Rate@3?**
 The share of test cases where the hidden product appears in the top 3 suggestions. On the demo data:
@@ -79,8 +79,15 @@ Lift rewards unusual pairings. A rare product that almost always appears with an
 **14. What were the most difficult problems?**
 - **Making the evaluation honest.** Preventing leakage, choosing a baseline, and being clear that synthetic data with planted patterns flatters the method.
 - **Messy input data.** Two layouts, alias column names, comma, semicolon, tab and pipe separators, blank and duplicate rows, capitalisation variants, and a pandas behaviour that silently misreads rows longer than the header. A generated demo file with known injected problems lets the tests check that every problem is counted exactly.
-- **Bundle scoring.** Lift against independence grows with set size, so I used all-confidence to compare pairs and triples fairly.
+- **Bundle scoring.** Lift against independence grows with set size, so I used all-confidence to compare pairs and triples fairly. A later review showed that all-confidence alone could offer two popular but unrelated products as a bundle, so bundles must now also have lift above 1.
 - **Small datasets.** Interface tests found a slider that crashed on very small catalogues, which I fixed.
+- **Bugs a release audit found.** An independent review of the finished app found problems the tests had missed, because the interface tests ran one page at a time:
+  - a second "Apply settings" in a row was ignored;
+  - the basket was lost when changing pages;
+  - an ignored product could still be suggested as a best seller;
+  - returns were counted as purchases, and day/month dates were misread.
+
+  Each fix has a regression test that fails on the old code. The lesson: test the journeys users take across pages, not just each page.
 
 **15. What would you improve next?**
 - Test on real retail data (with permission).
@@ -124,6 +131,15 @@ The downloadable templates and validation warnings are designed for exactly this
 **20. How would you decide whether to add a new feature?**
 Ask which user problem it solves and how often it occurs, whether evidence shows the need (requests, usage data, failed tasks), what it costs to build and maintain, and how we would measure that it worked. For example, I would add margin-aware ranking only if retailers said that low-margin suggestions are a real problem.
 
+**21. Isn't your 43 % circular, since you planted the associations yourself?**
+Partly, yes, and I say so. The result shows that the pipeline recovers known structure without leakage and beats a sensible baseline on the same cases. It does not show how much better rules are on real data, where associations are weaker. The next step is to rerun the same evaluation on a real export, ideally split by time.
+
+**22. Why association rules and not collaborative filtering or embeddings?**
+The input is anonymous baskets, which is what small retailers' billing exports contain. Collaborative filtering needs stable customer histories, and embeddings need much more data and lose explainability. Rules give a reason for every suggestion, which matters to a shop owner. With customer IDs and more data, I would compare item-based collaborative filtering against these rules in the same Evaluation Lab.
+
+**23. Would it work on a real export, such as the UCI Online Retail dataset?**
+The data layer was built for this. It recognises the UCI headers (`InvoiceNo`, `Description`, `InvoiceDate` and so on), removes cancellations (negative quantities), reads Windows-1252 text and detects month/day dates. This is covered by tests with UCI-style rows, but I have not published results on the full dataset.
+
 ## Numbers to remember (demo data, default settings)
 
 | Item | Value |
@@ -134,6 +150,6 @@ Ask which user problem it solves and how often it occurs, whether evidence shows
 | Hit Rate@3: best sellers vs confidence + fallback | 19.7 % vs 43.5 % (5 splits) |
 | Hit Rate@5: best sellers vs confidence + fallback | 30.1 % vs 53.1 % |
 | Coverage: best sellers vs rules | 26 % vs 77 % of products |
-| Automated tests | 114 |
+| Automated tests | 175 |
 
 Always add: "the demo data is synthetic with planted associations, so real data would show a smaller gap."

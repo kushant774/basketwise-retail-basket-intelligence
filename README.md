@@ -26,16 +26,17 @@ BasketWise is aimed at small shop owners, supermarket managers, retail analysts,
 | Load data | Data Explorer | Upload a CSV in long format (one row per product) or wide format (one row per transaction), or generate synthetic sample data. |
 | Trust the data | Data Explorer | Validation summary, warnings, a preview of the cleaned data, and downloads of removed rows with the reason for each. |
 | Understand sales | Product Analytics | Most and least purchased products, category reach, basket sizes, weekly volume and a product frequency table. |
-| Find patterns | Association Rules | Choose Apriori or FP-Growth and set support, confidence, lift and maximum rule size. Search and sort the rules, read a plain-English explanation of each, and export them. |
-| Suggest add-ons | Smart Recommendations | Build a basket and get ranked suggestions, each with its reason and supporting rule. Best sellers fill any free slots and are labelled as such. |
-| Plan promotions | Bundle Opportunities | Potential bundles, cross-selling pairs, merchandising groups and a relationship map. |
-| Check the evidence | Evaluation Lab | Compares four recommendation methods with a best-seller baseline on held-out transactions over repeated random splits. |
+| Find patterns | Association Rules | Choose Apriori or FP-Growth and set support, confidence, lift and maximum rule size, and ignore products such as carrier bags. Search and sort the rules, read a plain-English explanation of each, and export them. |
+| Suggest add-ons | Smart Recommendations | Build a basket and get ranked suggestions, each with its reason and supporting rule. Best sellers fill any free slots and are labelled as such; ignored products are never suggested. |
+| Plan promotions | Bundle Opportunities | Potential bundles (only sets bought together more often than chance), cross-selling pairs, merchandising groups and a relationship map. |
+| Check the evidence | Evaluation Lab | Compares three recommendation methods with a best-seller baseline on held-out transactions over repeated random splits. |
 | Share results | Settings & Data | Download a Markdown report or a ZIP of all CSV results. Reset the data or settings. |
 
 | | |
 |---|---|
 | ![Data Explorer after an upload](docs/images/data_explorer_upload.png) | ![Association rules](docs/images/association_rules.png) |
 | ![Smart Recommendations](docs/images/recommendations.png) | ![Evaluation Lab](docs/images/evaluation_lab.png) |
+| ![Product Analytics](docs/images/product_analytics.png) | ![Bundle Opportunities](docs/images/bundles.png) |
 
 The screenshots were captured from the running app with headless Chrome. The Data Explorer screenshot shows `Data/demo_upload_with_issues.csv`, a synthetic file with deliberately injected data problems; the validator reports each injected problem exactly.
 
@@ -49,7 +50,7 @@ The screenshots were captured from the running app with headless Chrome. The Dat
 | Graphs | NetworkX | Merchandising groups (community detection) |
 | Charts | Plotly | Interactive charts |
 | App | Streamlit | Eight-page local web app |
-| Tests | pytest, Streamlit AppTest | 114 automated tests, including interface tests |
+| Tests | pytest, Streamlit AppTest | 175 automated tests, including interface tests across pages |
 
 ## Quick start
 
@@ -72,13 +73,13 @@ Other entry points:
 .venv\Scripts\python -m market_basket summary              # command-line tools: summary, validate, rules,
 .venv\Scripts\python -m market_basket recommend Milk Bread #   recommend, insights, evaluate, report
 .venv\Scripts\python -m market_basket evaluate --splits 5
-.venv\Scripts\python -m pytest                             # 114 automated tests
+.venv\Scripts\python -m pytest                             # 175 automated tests
 .venv\Scripts\jupyter notebook notebooks/basketwise_walkthrough.ipynb
 ```
 
 ## Using your own data
 
-Upload a CSV on the Data Explorer page, or run `python -m market_basket validate --data your_file.csv`. Two layouts are accepted:
+Upload a CSV (or a tab-separated `.tsv`/`.txt` export) on the Data Explorer page, or run `python -m market_basket validate --data your_file.csv`. Two layouts are accepted:
 
 ```text
 Long format (one row per product)            Wide format (one row per transaction)
@@ -87,16 +88,18 @@ T1001,Milk,Dairy,1                           T1001,Milk,Bread,Butter
 T1001,Bread,Bakery,2                         T1002,Tea,Biscuits,
 ```
 
-**Separators.** Comma, semicolon, tab and pipe separators are detected automatically.
+**Separators and encodings.** Comma, semicolon, tab and pipe separators are detected automatically. Files may be UTF-8, UTF-16 (Excel's "Unicode text") or Windows-1252 (Excel CSV on Windows, which keeps characters such as ’ – €); a warning names any encoding other than UTF-8.
 
-**Column names.** Matching ignores case and accepts common alternatives, such as `invoice_no`, `order_id`, `item` and `product`. Optional columns are `category`, `quantity`, `unit_price`, `transaction_date`, `customer_id` and `product_id`.
+**Column names.** Matching ignores case, spacing and CamelCase, and accepts common alternatives such as `invoice_no` or `InvoiceNo`, `order_id`, `item`, `product` and `Description`, so the UCI Online Retail headers (`InvoiceNo`, `StockCode`, `Description`, `Quantity`, `InvoiceDate`, `UnitPrice`, `CustomerID`) work as they are. Optional columns are `category`, `quantity`, `unit_price`, `transaction_date`, `customer_id` and `product_id`.
 
 **How rows are cleaned:**
-- Missing transaction IDs and blank or `nan` product names are rejected.
-- Duplicate products in the same transaction are merged, and their quantities are added.
-- Extra spaces are removed, and names that differ only in capitalisation are merged.
+- Missing transaction IDs and blank product names (including placeholders such as `nan`, `NULL`, `#N/A` or `-`) are rejected.
+- Rows with a negative quantity are returns or cancellations. They are removed, so a returned product is never counted as a purchase.
+- Duplicate lines for the same product in one transaction are merged and their quantities added (each line is treated as a separate scan).
+- Extra spaces are removed, names that differ only in capitalisation are merged, and accented characters are stored in one Unicode form.
+- Dates may be `yyyy-mm-dd`, day/month/year or month/day/year. The order of day and month is detected from the data; if every date could be either, day/month/year is used and a warning says so. Dates are stored as `yyyy-mm-dd`.
 - Every removed row is listed with its reason and can be downloaded.
-- Clear warnings appear when more than 5 % of rows are removed, when unused columns are ignored, or when the data is too small to be reliable.
+- Clear warnings appear when more than 5 % of rows are removed, when unused columns are ignored, when dates are ambiguous or unreadable, or when the data is too small to be reliable.
 
 **Files that are refused with a message:**
 - empty files
@@ -105,17 +108,17 @@ T1001,Bread,Bakery,2                         T1002,Tea,Biscuits,
 - rows longer than the header
 - files over 50 MB or 2,000,000 rows
 
-Uploaded files are processed in memory for that browser session only.
+**Where your data goes.** Uploaded files are processed in the memory of the running app and are never written to disk. Cleaned data and results are cached in that server memory, shared by every browser session connected to the same running app, and cleared when the app restarts. Run BasketWise on your own computer for private data.
 
-To see validation at work, upload `Data/demo_upload_with_issues.csv`. It is synthetic, made with `python scripts/generate_data.py --transactions 3000 --seed 7 --with-issues --output Data/demo_upload_with_issues.csv`.
+To see validation at work, upload `Data/demo_upload_with_issues.csv`. It is synthetic, made with `python scripts/generate_data.py --transactions 3000 --seed 7 --with-issues --output Data/demo_upload_with_issues.csv`. Files made by the BasketWise generator are recognised by their ID format (`SYN-T…` transactions and `SYN-C…` customers) and labelled synthetic wherever they are loaded.
 
 ## Example workflow
 
 One complete journey takes about seven minutes. See [docs/DEMO_WALKTHROUGH.md](docs/DEMO_WALKTHROUGH.md) for the full script and expected numbers.
 
-1. **Data Explorer:** upload `Data/demo_upload_with_issues.csv`. 11,070 rows come in, and 2,997 valid transactions remain. 275 rows are removed, each listed with its reason (missing IDs, blank names, duplicates), and 219 capitalisation variants are merged.
-2. **Association Rules:** the defaults give 233 rules, such as Cheese + Pasta → Pasta Sauce (confidence 64%, lift 13.8).
-3. **Smart Recommendations:** the basket Milk + Bread gives Butter first (44.8% of such baskets), with the reason shown.
+1. **Data Explorer:** upload `Data/demo_upload_with_issues.csv`. 11,070 rows come in, and 2,997 valid transactions remain. 275 rows are removed, each listed with its reason (missing IDs, blank names, duplicates), and 219 capitalisation variants are merged. The badge marks the file as synthetic.
+2. **Association Rules:** the defaults give 233 rules. Searching for `pasta` shows Cheese + Pasta → Pasta Sauce first (confidence 64%, lift 13.8).
+3. **Smart Recommendations:** the basket Milk + Bread gives Butter first (44.8% of such baskets), with the reason shown. The basket is kept while you visit other pages.
 4. **Bundle Opportunities:** the top bundle is Pasta + Pasta Sauce (all-confidence 43%).
 5. **Evaluation Lab:** over 5 splits, Hit Rate@3 is 41.8% for confidence-ranked rules with fallback, against 21.1% for best sellers.
 6. **Settings & Data:** download the Markdown report and the ZIP of CSV files.
@@ -129,8 +132,8 @@ CSV upload / synthetic generator
 market_basket.data        read, detect layout, validate, clean  ──► validation report, removed rows
         │ transactions
         ▼
-market_basket.mining      one-hot encode → mlxtend apriori / fpgrowth → mlxtend association_rules
-        │                 → thresholds, product exclusions, ranking, plain-English explanations
+market_basket.mining      one-hot encode → size check before mining → mlxtend apriori / fpgrowth
+        │                 → mlxtend association_rules → thresholds, ignored products, ranking, explanations
         ├──► market_basket.recommend    explainable recommendations + best-seller fallback
         ├──► market_basket.insights     popularity, categories, cross-sell, bundles, merchandising groups
         ├──► market_basket.evaluation   train/test splits, leave-one-out hit rate vs best-seller baseline
@@ -147,7 +150,7 @@ ui/ + app.py (Streamlit pages)   ·   market_basket/cli.py (command line)   ·  
 
 These algorithms are not reimplemented here. BasketWise's own code covers everything around them:
 - the synthetic data generator, data validation and cleaning
-- settings, rule filtering and ranking, and explanations
+- settings, safety limits checked before mining, rule filtering and ranking, and explanations
 - the recommendation engine and its fallback
 - the evaluation framework
 - business insights, charts, reports, the app and the CLI
@@ -166,17 +169,18 @@ Lift above 1 indicates a positive association in the observed data. It is not pr
 - Ranks the applicable rules by confidence (the default), by lift or by support.
 - Suggests each product once, through its best rule, with a reason. For example: *"Customers whose basket contained Bread and Milk also bought Butter in 41% of those transactions (3.8x its usual rate) in the observed data."*
 - Fills any remaining slots with best sellers, labelled as best sellers.
+- Never suggests a product you chose to ignore, not even as a best seller.
 
 ## Evaluation and results
 
-**Method.** Each of these steps is reproducible:
+**Method.** Three recommendation methods are compared with a best-seller baseline. Each of these steps is reproducible:
 1. Shuffle the transactions with a fixed seed and split them 80/20 into training and test sets.
 2. Mine the rules and compute best sellers from the training split only.
 3. In every test transaction with at least two products, hide each product in turn and ask each method for recommendations based on the remaining products.
 4. Score a hit if the hidden product appears in the top 3 (Hit Rate@3) or top 5 (Hit Rate@5).
 5. Repeat over several random splits.
 
-Results on the demo data come from `python -m market_basket evaluate --splits 5`: seeds 42–46, default settings, 5,760 evaluated cases per split.
+Results on the demo data come from `python -m market_basket evaluate --splits 5`: seeds 42–46, default settings, on average 5,760 evaluated cases per split (5,683–5,896).
 
 | Method | Hit Rate@3 | Hit Rate@5 | Availability | Coverage |
 |---|---|---|---|---|
@@ -188,7 +192,8 @@ Results on the demo data come from `python -m market_basket evaluate --splits 5`
 Every rule-based method beat the baseline in all 5 splits. The standard deviation across splits was 0.6 percentage points or less.
 
 **How to read this honestly:**
-- The synthetic generator deliberately plants product associations, so the rules are expected to do well here. The result shows that the pipeline recovers real structure; it does not predict performance in a real shop.
+- The synthetic generator deliberately plants product associations, so the rules are expected to do well here. The result shows that the pipeline recovers the planted structure; it does not predict performance in a real shop.
+- The default ranking (confidence) and thresholds were chosen after looking at results like these on the same demo data, so the default method's lead is slightly optimistic. This selection effect is small next to the 20-point gap to the baseline, but it means the comparison is not a fully held-out test.
 - Offline hit rate rewards suggesting products the customer would have bought anyway. Only a controlled A/B test can measure extra sales.
 - See [docs/EVALUATION_REPORT.md](docs/EVALUATION_REPORT.md) for details.
 
@@ -209,7 +214,7 @@ Data/demo_upload_with_issues.csv         generated upload with known data proble
 scripts/generate_data.py     regenerates the demo data
 scripts/benchmark.py         Apriori vs FP-Growth timing
 notebooks/basketwise_walkthrough.ipynb   step-by-step analysis using the package
-tests/                       114 pytest tests (data, mining, recommendations, evaluation, reports, CLI, app)
+tests/                       175 pytest tests (data, mining, recommendations, evaluation, reports, CLI, app)
 docs/                        product, architecture, algorithm, evaluation, testing and interview documents
 ```
 
@@ -219,8 +224,10 @@ docs/                        product, architecture, algorithm, evaluation, testi
 - Association rules describe co-occurrence, not causation, and offline hit rate is not business impact.
 - Evaluation splits transactions at random, not by time, and the rules are static (there are no seasonal or trend effects).
 - Products below the minimum support never appear in rules, and recommendations cannot use price, margin, stock or customer history.
+- When every date in a file could be read either way (for example 05/01/2025), day/month/year is assumed; a US file with no day above 12 would be misread, and a warning says so.
+- To stay responsive, settings that could produce more than 200,000 frequent itemsets or 500,000 candidate rules are refused with a message (the itemset limit is checked before mining starts). On large catalogues, keep a maximum rule size.
 - The app runs locally for a single user. It is not deployed, has no authentication and keeps no history between sessions.
-- Scaling was benchmarked up to 120,000 synthetic transactions with 47 products, not on large catalogues.
+- Scaling was benchmarked up to 120,000 synthetic transactions with 47 products, not on large catalogues. Timings depend on the computer.
 
 ## Future improvements
 

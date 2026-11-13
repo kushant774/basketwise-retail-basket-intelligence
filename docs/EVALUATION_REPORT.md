@@ -4,21 +4,25 @@ To reproduce these results, run `python -m market_basket evaluate --splits 5` (a
 
 ## What was measured
 
-The question: *if a customer has already put some products in the basket, do BasketWise's suggestions include the product they actually bought next?* This is compared with a simple alternative, suggesting the best sellers.
+The question: *if a customer has already put some products in the basket, do BasketWise's suggestions include another product that was actually in the same basket?* (Baskets have no order, so this is not "the product bought next".) Three recommendation methods are compared with a simple alternative, suggesting the best sellers.
 
 ### Method
 
 1. **Split.** Shuffle the transactions with a fixed seed and use 80 % for training and 20 % for testing (1,600 test transactions). Repeat with seeds 42, 43, 44, ... for several splits.
 2. **Train.** Mine rules and compute best-seller shares from the **training split only**.
-3. **Hide one product.** For every test transaction with at least two products, hide each product in turn. The remaining products are the query basket, and the hidden product is the target. Single-product transactions cannot be evaluated this way and are skipped. This gives about 5,760 cases per split.
+3. **Hide one product.** For every test transaction with at least two products, hide each product in turn. The remaining products are the query basket, and the hidden product is the target. Single-product transactions cannot be evaluated this way and are skipped. This gives 5,760 cases per split on average (5,683 to 5,896 in the five splits).
 4. **Score.** Each method returns up to 5 suggestions for the query basket. Hit Rate@k is the share of cases where the target is among the first k.
 
 ### Leakage controls (tested in `tests/test_evaluation.py`)
 
 - The mining function and the best-seller calculation are checked to receive exactly the training transactions for every split.
 - A product that appears only in test data is never recommended.
+- Every method is scored on exactly the same cases.
+- Products the user chose to ignore are treated the same way by every method: no method may recommend them, cases that would hide them are skipped, and they are left out of coverage. With the default settings nothing is ignored.
 
 ## Methods compared
+
+Three recommendation methods and the baseline:
 
 | Method | Description |
 |---|---|
@@ -69,6 +73,7 @@ The numbers in brackets are the standard deviation across splits, in percentage 
 2. **Offline hit rate is not business impact.** A hit means the suggestion matched something the customer bought anyway. A recommendation creates value only if it causes an extra purchase, and offline data cannot measure that.
 3. **The split is random, not by time.** In practice, rules learned from past months are used on future months, and preferences change (seasonality, new products).
 4. **Each basket contributes several cases.** The cases within one split are not independent. The spread across splits is the more honest guide to variability.
+5. **The defaults were chosen on this same data.** Within one run, the test transactions are never used to build recommendations. However, BasketWise's default ranking (confidence) and thresholds were chosen after looking at results like these on the demo data, so the default method's lead over the other rule methods is slightly optimistic. The effect is small next to the 20-point gap to the baseline, but this is not a fully held-out test. A clean check would fix the settings first and then evaluate on new data, such as a later time period.
 
 ## What would establish real business impact: an A/B test
 

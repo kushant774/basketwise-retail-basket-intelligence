@@ -48,4 +48,8 @@ The current implementation was developed with substantial help from an AI coding
   - reported the results, including failures and limitations
 - **Responsibility.** The author is responsible for understanding, verifying and being able to explain every part before presenting it as their work. `docs/INTERVIEW_PREPARATION.md` separates what was built, what comes from libraries, and what AI assistance contributed.
 
+### Release audit (November 2026)
+
+At the author's request, the finished project was audited in AI-assisted sessions. Separate review agents checked algorithm correctness, code quality and data handling, and the Streamlit interface, and each finding was reproduced before it was fixed. The resulting fixes and their regression tests are described in `docs/TESTING_REPORT.md`; the same assistant implemented them, and the author authorised the changes and their publication. The audit independently recomputed every rule metric and reproduced every published evaluation number. It confirmed that the mlxtend-provided algorithms were used correctly, so they were not changed.
+
 No result in the documentation is hand-written. Every number comes from running the code in this repository.

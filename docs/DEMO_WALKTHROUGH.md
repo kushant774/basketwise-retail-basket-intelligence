@@ -39,8 +39,9 @@ Open <http://localhost:8501>. Use the sidebar to move between pages; reloading t
 - 219 capitalisation variants merged (for example `MILK` merged into `Milk`)
 - 219 names with extra spaces fixed
 - the unused `store_id` column reported
+- the badge changes to "Synthetic data: demo_upload_with_issues.csv", because BasketWise recognises files made by its own generator
 
-**Say:** "Real exports are messy, so the first job is trust. Nothing is dropped silently: every removed row can be downloaded with its reason, and a warning appears if more than 5% of rows are lost. Semicolon-, tab- and pipe-separated exports are detected automatically."
+**Say:** "Real exports are messy, so the first job is trust. Nothing is dropped silently: every removed row can be downloaded with its reason, and a warning appears if more than 5% of rows are lost. Semicolon-, tab- and pipe-separated exports, Excel's Windows-1252 and UTF-16 text, headers such as `InvoiceNo`, returns with negative quantities and day/month/year dates are all handled."
 
 ## 3. Product Analytics — what sells (30 s)
 
@@ -52,9 +53,11 @@ Open <http://localhost:8501>. Use the sidebar to move between pages; reloading t
 
 **Do:** open **Association Rules**, keep the defaults (support 1%, confidence 20%, lift 1.2), and expand "What do support, confidence and lift mean?". Search for `pasta` and select a rule.
 
-**You will see:** 242 frequent itemsets and 233 rules. One example: in 64% of baskets with Cheese and Pasta, Pasta Sauce was also bought, which is a lift of 13.8.
+**You will see:** 242 frequent itemsets and 233 rules. The first rule found by the search is explained below the table: in 64% of baskets with Cheese and Pasta, Pasta Sauce was also bought, which is a lift of 13.8.
 
 **Say:** "Apriori and FP-Growth come from the mlxtend library. BasketWise adds thresholds, ranking and a plain-English reading of every rule. Lift above 1 means a positive association in this data, not proof of cause."
+
+**Optional:** add Milk to **Ignore products** and click **Apply settings**. The sidebar updates at once, and Milk disappears from rules, suggestions (including best sellers) and bundles, while the sales charts still include it. Remove it again before continuing.
 
 ## 5. Smart Recommendations — act on it (75 s)
 
@@ -65,7 +68,7 @@ Open <http://localhost:8501>. Use the sidebar to move between pages; reloading t
 2. Eggs: 36.7%.
 3. Tea: 26.8% (from the rule Milk → Tea).
 
-Each suggestion shows its reason and supporting rule. Best sellers fill any remaining slots and are labelled as such.
+Each suggestion shows its reason and supporting rule. Best sellers fill any remaining slots and are labelled as such. The basket stays as it is when you visit another page and come back.
 
 **Say:** "Every suggestion is explainable. Products already in the basket are never suggested. If no rule applies, best sellers fill the gap, clearly labelled."
 
@@ -78,13 +81,13 @@ Each suggestion shows its reason and supporting rule. Best sellers fill any rema
 - Cross-sell pairs such as Conditioner → Shampoo (confidence 69%).
 - Merchandising groups and a relationship map.
 
-**Say:** "Bundles are ranked by all-confidence, so pairs and triples are compared fairly. These are potential opportunities to test, not guaranteed wins."
+**Say:** "A set is only offered as a bundle if its products are bought together more often than chance. The candidates are then ranked by all-confidence, so pairs and triples are compared fairly. These are potential opportunities to test, not guaranteed wins."
 
 ## 7. Evaluation Lab — is it better than best sellers? (75 s)
 
 **Do:** open **Evaluation Lab** with 5 splits, a 20% test share and seed 42. Click **Run evaluation**, then open **How the evaluation works**.
 
-**You will see (2,090 hidden-product cases per split):**
+**You will see (three recommendation methods and the best-seller baseline; 2,090 hidden-product cases per split on average):**
 
 | Method | Hit Rate@3 | Hit Rate@5 |
 |---|---|---|
@@ -95,7 +98,7 @@ Each suggestion shows its reason and supporting rule. Best sellers fill any rema
 
 Every rule-based method beat the baseline in 5 of 5 splits.
 
-**Say:** "Rules and best sellers are learned from the training split only. In each test basket we hide one product and check whether it appears in the top suggestions. Rules clearly beat best sellers here, but the data is synthetic with planted patterns, and offline hit rate is not extra sales. An A/B test would be needed to measure business impact."
+**Say:** "Rules and best sellers are learned from the training split only. In each test basket we hide one product and check whether it appears in the top suggestions. Rules clearly beat best sellers here, but the data is synthetic with planted patterns, the default settings were tuned on this kind of data, and offline hit rate is not extra sales. An A/B test would be needed to measure business impact."
 
 ## 8. Settings & Data — share the results (30 s)
 
