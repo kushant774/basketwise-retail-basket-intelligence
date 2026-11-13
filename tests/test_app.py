@@ -162,3 +162,136 @@ def test_uploading_the_demo_file_with_known_data_problems():
     assert metrics["Valid transactions"] == "2,997" and metrics["Unique products"] == "47"
     assert metrics["Rows removed or rejected"] == "275"  # 55 missing IDs + 110 blank names + 110 duplicates
     assert any("capitalisation" in w.value for w in at.warning)
+    assert "Synthetic data: demo_upload_with_issues.csv" in texts(at)  # recognised as generated data
+
+
+# ---------------------------------------------------------------- cross-page behaviour (C1, C2, I1)
+# These run several pages in ONE session, with the sidebar drawn before the page as in app.py, so that
+# state carried between pages and reruns is tested (page() above runs a single page on its own).
+
+APP_PAGES = """
+import streamlit as st
+from ui import components, state
+from ui.navigation import sidebar
+from ui.views import association_rules, bundles, data_explorer, evaluation_lab, recommendations, settings
+components.inject_css()
+state.init()
+sidebar()
+components.show_flash()
+PAGES = {"rules": association_rules, "recommendations": recommendations, "bundles": bundles,
+         "data": data_explorer, "evaluation": evaluation_lab, "settings": settings}
+PAGES[st.session_state.get("test_page", "rules")].render()
+"""
+
+
+def session(page_name: str = "rules") -> AppTest:
+    at = AppTest.from_string(APP_PAGES, default_timeout=TIMEOUT)
+    at.session_state["test_page"] = page_name
+    return at.run()
+
+
+def go(at: AppTest, page_name: str) -> AppTest:
+    at.session_state["test_page"] = page_name
+    return at.run()
+
+
+def sidebar_text(at: AppTest) -> str:
+    return " ".join(str(e.value) for kind in ("markdown", "caption") for e in at.sidebar.get(kind))
+
+
+def apply_support(at: AppTest, value: float) -> AppTest:
+    labelled(at.slider, "Minimum support").set_value(value)
+    labelled(at.button, "Apply settings").click()
+    return at.run()
+
+
+def test_consecutive_apply_uses_the_latest_values_and_refreshes_the_sidebar():
+    at = session("rules")
+    for value, shown in ((0.05, "5.0%"), (0.03, "3.0%"), (0.02, "2.0%")):
+        apply_support(at, value)
+        assert not at.exception
+        assert at.session_state["config"].min_support == pytest.approx(value)
+        assert labelled(at.slider, "Minimum support").value == pytest.approx(value)
+        rules_on_page = {m.label: m.value for m in at.metric}["Association rules"]
+        assert f"Support ≥ {shown}" in sidebar_text(at)
+        assert f"**{rules_on_page}** association rules" in sidebar_text(at)  # sidebar and page agree
+        assert "Mining settings applied." in texts(at)
+
+
+def test_apply_keeps_the_other_settings_and_reports_invalid_ones():
+    at = session("rules")
+    labelled(at.slider, "Minimum confidence").set_value(0.5)
+    labelled(at.multiselect, "Ignore products").set_value(["Milk"])
+    labelled(at.button, "Apply settings").click()
+    at.run()
+    apply_support(at, 0.02)  # a second, separate apply must not undo the first one
+    config = at.session_state["config"]
+    assert (config.min_support, config.min_confidence, config.exclude) == (pytest.approx(0.02), 0.5, ("Milk",))
+
+
+def test_the_basket_survives_moving_to_other_pages():
+    at = session("recommendations")
+    labelled(at.multiselect, "Search and add products").set_value(["Milk", "Bread"]).run()
+    assert "1. Butter" in texts(at)
+    for other in ("bundles", "rules", "settings"):
+        go(at, other)
+        assert not at.exception
+    go(at, "recommendations")
+    assert labelled(at.multiselect, "Search and add products").value == ["Milk", "Bread"]
+    assert "1. Butter" in texts(at)
+    labelled(at.multiselect, "Search and add products").set_value(["Pasta"]).run()  # changing it still works
+    go(at, "bundles")
+    go(at, "recommendations")
+    assert labelled(at.multiselect, "Search and add products").value == ["Pasta"]
+    labelled(at.button, "Clear basket").click().run()
+    assert labelled(at.multiselect, "Search and add products").value == []
+
+
+def test_ignored_products_never_appear_in_suggestions_bundles_or_insights():
+    at = session("rules")
+    labelled(at.multiselect, "Ignore products").set_value(["Milk", "Shampoo"])
+    labelled(at.button, "Apply settings").click()
+    at.run()
+    assert "2 ignored" in sidebar_text(at)
+    go(at, "recommendations")  # empty basket: best sellers only, and Milk is the top best seller
+    titles = [m.value for m in at.markdown if "bw-card-title" in m.value and ". " in m.value]
+    assert titles and not any("Milk" in title for title in titles)
+    labelled(at.multiselect, "Search and add products").set_value(["Pasta"]).run()
+    assert "Milk" not in " ".join(m.value for m in at.markdown if "bw-card-title" in m.value)
+    go(at, "bundles")
+    tables = [df.value for df in at.dataframe if "products" in df.value.columns]
+    assert tables and not tables[0]["products"].str.contains("Milk|Shampoo").any()
+    overview = AppTest.from_file(APP, default_timeout=TIMEOUT)
+    overview.session_state["config"] = at.session_state["config"]
+    overview.run()
+    assert "Conditioner + Shampoo" not in texts(overview) and "Milk" in texts(overview)  # sales stats keep Milk
+
+
+def test_a_refused_upload_keeps_its_error_visible_until_the_file_is_removed():
+    at = session("data")
+    at.file_uploader[0].upload("broken.csv", b"colour,size\nred,10\n", "text/csv").run()
+    assert any("broken.csv could not be used" in e.value for e in at.error)
+    labelled(at.number_input, "Transactions").set_value(1000).run()  # an unrelated interaction
+    assert any("broken.csv could not be used" in e.value for e in at.error)
+    assert {m.label: m.value for m in at.metric}["Valid transactions"] == "8,000"
+
+
+def test_use_demo_data_when_it_is_already_active_resets_nothing():
+    at = session("rules")
+    labelled(at.multiselect, "Ignore products").set_value(["Milk"])
+    labelled(at.button, "Apply settings").click()
+    at.run()
+    go(at, "data")
+    labelled(at.button, "Use demo data").click().run()
+    assert at.session_state["config"].exclude == ("Milk",)
+    assert "already in use" in texts(at)
+
+
+def test_evaluation_shows_the_settings_it_used_and_a_search_without_matches_says_so():
+    at = session("evaluation")
+    labelled(at.slider, "Random splits").set_value(1)
+    labelled(at.button, "Run evaluation").click().run()
+    assert "Result shown: 1 random split" in texts(at) and "FP-Growth" in texts(at)
+    go(at, "rules")
+    labelled(at.text_input, "Find rules mentioning a product").set_value("zzz-not-a-product").run()
+    assert "No rule mentions" in texts(at) and not at.exception

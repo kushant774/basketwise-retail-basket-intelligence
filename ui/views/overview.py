@@ -4,6 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from market_basket import plots
+from market_basket.config import ALGORITHM_NAMES
 from market_basket.data import summarize
 from market_basket.insights import bundle_opportunities, key_insights, product_popularity
 from ui import components as ui
@@ -36,15 +37,16 @@ def render() -> None:
         else:
             bundles = bundle_opportunities(result, state.best_sellers(), data.categories)
             for note in key_insights(data, result, popularity, bundles):
-                st.markdown(f"- {note}")
+                st.markdown(f"- {ui.escape(note)}")
         st.subheader("Analysis summary")
         config = state.config()
         if result is not None:
             st.markdown(
                 f"{len(result.rules):,} association rules from {len(result.frequent_itemsets):,} frequent itemsets, "
-                f"using {config.algorithm.replace('fpgrowth', 'FP-Growth').replace('apriori', 'Apriori')} with "
-                f"minimum support {config.min_support:.1%}, confidence {config.min_confidence:.0%} and lift "
-                f"{config.min_lift:.1f}."
+                f"using {ALGORITHM_NAMES[config.algorithm]} with minimum support {config.min_support:.1%}, "
+                f"confidence {config.min_confidence:.0%} and lift {config.min_lift:.1f}."
+                + (f" Ignored in rules, suggestions and bundles: {ui.escape(', '.join(config.exclude))}."
+                   if config.exclude else "")
             )
         if "first date" in stats:
             st.markdown(f"Transactions from {stats['first date']} to {stats['last date']}.")
@@ -62,7 +64,7 @@ def render() -> None:
         (BUNDLES, "4. Plan bundles", "Review potential bundles, cross-sell pairs and product groupings."),
         (EVALUATION, "5. Check the evidence", "Compare the recommendations with simply suggesting best sellers."),
     ]
-    for column, (page, title, text) in zip(st.columns(len(steps)), steps):
+    for column, (page, title, text) in zip(st.columns(len(steps)), steps, strict=True):
         with column.container(border=True, height="stretch"):
             st.markdown(f'<div class="bw-card-title">{title}</div><div class="bw-muted">{text}</div>',
                         unsafe_allow_html=True)

@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from market_basket import plots
+from market_basket.config import ALGORITHM_NAMES, MiningConfig
 from market_basket.evaluation import METHODS
 from ui import components as ui
 from ui import state
@@ -31,8 +32,13 @@ def _methodology() -> None:
             "suggestions. **Availability** is the share of cases with at least one suggestion. **Coverage** is "
             "the share of products that a method ever recommends.\n"
             "5. This is repeated on several random splits; the table shows the average and the spread.\n"
-            "6. Every method uses the same mining settings, chosen before the evaluation runs; the test "
-            "transactions are never used to tune them."
+            "6. Every method uses the same mining settings, and products you chose to ignore are treated the same "
+            "way by every method (never recommended and never hidden).\n"
+            "7. Three recommendation methods are compared with the best-seller baseline. Within one run, the test "
+            "transactions are never used to build recommendations. However, BasketWise's default settings and "
+            "ranking (confidence) were chosen after looking at results like these on the demo data, so the "
+            "default method's lead may be slightly optimistic. This selection effect is small compared with the "
+            "gap to the baseline on the demo data, but on new data treat the comparison as a first check, not proof."
         )
         for method, note in METHOD_NOTES.items():
             st.markdown(f"- **{method}**: {note}")
@@ -56,10 +62,19 @@ def _limitations(is_synthetic: bool) -> None:
         st.markdown(f"- {note}")
 
 
+def _settings_text(config: MiningConfig) -> str:
+    text = (f"support ≥ {config.min_support:.1%}, confidence ≥ {config.min_confidence:.0%}, lift ≥ "
+            f"{config.min_lift:.1f}, at most {config.max_len or 'any number of'} products per rule, "
+            f"{ALGORITHM_NAMES[config.algorithm]}")
+    if config.exclude:
+        text += f", ignoring {', '.join(config.exclude)}"
+    return text
+
+
 def render() -> None:
     data = state.data()
     ui.page_header("Evaluation Lab", "Do the recommendations find what customers actually bought? "
-                                     "Compared against simply recommending best sellers.")
+                                     "Three methods compared against simply recommending best sellers.")
     _methodology()
     config = state.config()
     with st.form("evaluation_settings", border=True):
@@ -67,8 +82,7 @@ def render() -> None:
         n_splits = left.slider("Random splits", 1, 10, 5, help="More splits give a more reliable average.")
         test_size = middle.select_slider("Test share", [0.1, 0.2, 0.3, 0.4], value=0.2, format_func=ui.pct)
         seed = right.number_input("Random seed", 0, 99_999, 42)
-        st.caption(f"Uses the current mining settings: support ≥ {config.min_support:.1%}, confidence ≥ "
-                   f"{config.min_confidence:.0%}, lift ≥ {config.min_lift:.1f}, {config.algorithm}.")
+        st.caption(f"Uses the current mining settings: {_settings_text(config)}.")
         run = st.form_submit_button("Run evaluation", type="primary", icon=":material/play_arrow:")
     if run:
         try:
@@ -85,6 +99,11 @@ def render() -> None:
     if stale:
         st.warning("The data or mining settings changed after this evaluation. Run it again to update the results.",
                    icon=":material/warning:")
+    used = result.settings
+    st.caption(f"Result shown: {used['n_splits']} random split{'s' if used['n_splits'] != 1 else ''}, "
+               f"{used['test_size']:.0%} of transactions held out, seeds {used['seed']}–"
+               f"{used['seed'] + used['n_splits'] - 1}, {used['n_transactions']:,} transactions; "
+               f"{ui.escape(_settings_text(used['config']))}.")
 
     summary = result.summary.set_index("method")
     baseline = summary.loc[BASELINE]
@@ -93,11 +112,12 @@ def render() -> None:
     best = challengers.loc[best_name]
     n = result.settings["n_splits"]
     ui.metric_row([
-        ("Best-seller Hit Rate@3", ui.pct(baseline["hit rate@3"], 1), METHOD_NOTES[BASELINE]),
+        ("Best-seller Hit Rate@3", ui.pct(baseline["hit rate@3"], 1), METHOD_NOTES.get(BASELINE)),
         ("Best method Hit Rate@3", ui.pct(best["hit rate@3"], 1), best_name),
         ("Difference@3", f"{(best['hit rate@3'] - baseline['hit rate@3']) * 100:+.1f} pts",
          "Percentage points versus the best-seller baseline."),
-        ("Cases evaluated per split", f"{int(baseline['cases']):,}", "Hidden-product cases in each test set."),
+        ("Cases per split (average)", f"{int(baseline['cases']):,}",
+         "Hidden-product cases in each test set, averaged over the splits."),
     ])
     wins = int(best["splits beating baseline@3"])
     if best["hit rate@3"] > baseline["hit rate@3"]:

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from market_basket.config import ALGORITHM_NAMES
 from ui import state
 from ui.views import (
     association_rules,
@@ -54,4 +55,5 @@ def sidebar() -> None:
         else:
             st.markdown(f"**{len(result.rules):,}** association rules")
         st.caption(f"Support ≥ {config.min_support:.1%} · confidence ≥ {config.min_confidence:.0%} · "
-                   f"lift ≥ {config.min_lift:.1f} · {config.algorithm}")
+                   f"lift ≥ {config.min_lift:.1f} · {ALGORITHM_NAMES[config.algorithm]}"
+                   + (f" · {len(config.exclude)} ignored" if config.exclude else ""))

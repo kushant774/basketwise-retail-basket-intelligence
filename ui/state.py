@@ -1,8 +1,13 @@
 """Session state and cached computations shared by every page.
 
 Each browser session has its own data source, mining settings, basket and evaluation result
-(st.session_state). Expensive steps are cached with st.cache_data and keyed by the data source,
-so moving between pages or changing an unrelated widget does not repeat the mining.
+(st.session_state). These are plain session-state keys, not widget keys: Streamlit deletes a
+widget's value when its page is not shown, so widgets copy their values into these keys.
+
+Expensive steps are cached with st.cache_data and keyed by the data source, so moving between
+pages or changing an unrelated widget does not repeat the mining. The cache lives in the memory
+of the server process: it is shared by every session of the running app (an identical upload is
+recognised by its content hash) and is cleared when the app restarts. Nothing is written to disk.
 """
 from __future__ import annotations
 
@@ -71,8 +76,22 @@ def use_generated(n_transactions: int, n_products: int, seed: int) -> Transactio
     return loaded
 
 
-def use_demo() -> None:
+def use_demo() -> bool:
+    """Make the bundled demo data active. Returns False (and changes nothing) if it already is."""
+    if source_key() == DEMO_SOURCE["key"]:
+        return False
     _switch(dict(DEMO_SOURCE))
+    return True
+
+
+def basket() -> list[str]:
+    """The current basket, limited to products in the active dataset."""
+    catalog = set(data().catalog)
+    return [product for product in st.session_state.basket if product in catalog]
+
+
+def set_basket(products: list[str]) -> None:
+    st.session_state.basket = list(products)
 
 
 def config() -> MiningConfig:

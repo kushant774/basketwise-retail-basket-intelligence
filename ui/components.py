@@ -1,9 +1,21 @@
 """Small reusable pieces of the interface: page headers, metric cards, notes and table formats."""
 from __future__ import annotations
 
+import html
+
 import streamlit as st
 
 from market_basket.data import TransactionData
+
+# Characters that Markdown (or Streamlit's LaTeX support, for "$") would otherwise interpret.
+_MARKDOWN_ENTITIES = {"$": "&#36;", "*": "&#42;", "_": "&#95;", "`": "&#96;", "~": "&#126;",
+                      "[": "&#91;", "]": "&#93;", "\\": "&#92;"}
+
+
+def escape(text: object) -> str:
+    """Product names and other data shown inside Markdown or HTML, displayed literally."""
+    escaped = html.escape(str(text), quote=True)
+    return "".join(_MARKDOWN_ENTITIES.get(character, character) for character in escaped)
 
 CSS = """
 <style>
@@ -19,10 +31,6 @@ CSS = """
             background: #eef4fd; color: #184f95; font-size: 0.85rem; border: 1px solid #cde2fb;}
 </style>
 """
-
-PERCENT = st.column_config.NumberColumn(format="percent")
-DECIMAL = st.column_config.NumberColumn(format="%.2f")
-INTEGER = st.column_config.NumberColumn(format="localized")
 
 RULE_COLUMNS = {
     "antecedents": st.column_config.TextColumn("If the basket has", width="medium"),
@@ -61,18 +69,19 @@ def page_header(title: str, subtitle: str) -> None:
 
 def data_badge(data: TransactionData) -> None:
     if data.is_synthetic:
-        st.badge(data.source, icon=":material/science:", color="blue")
+        label = data.source if "synthetic" in data.source.lower() else f"Synthetic data: {data.source}"
+        st.badge(label, icon=":material/science:", color="blue")
     else:
         st.badge(f"Uploaded file: {data.source}", icon=":material/upload_file:", color="green")
 
 
 def metric_row(metrics: list[tuple[str, str, str | None]]) -> None:
-    for column, (label, value, help_text) in zip(st.columns(len(metrics)), metrics):
+    for column, (label, value, help_text) in zip(st.columns(len(metrics)), metrics, strict=True):
         column.metric(label, value, help=help_text, border=True)
 
 
 def chips(names: list[str]) -> None:
-    st.markdown("".join(f'<span class="bw-chip">{name}</span>' for name in names), unsafe_allow_html=True)
+    st.markdown("".join(f'<span class="bw-chip">{escape(name)}</span>' for name in names), unsafe_allow_html=True)
 
 
 def explain_metrics() -> None:

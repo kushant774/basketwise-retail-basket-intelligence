@@ -24,12 +24,17 @@ def render() -> None:
 
     top_n = st.slider("Number of suggestions", 5, 30, 10)
     st.subheader("Potential bundles")
-    st.caption("Pairs and triples ranked by all-confidence: at least this share of the buyers of any one product in "
-               "the set bought the whole set. Unlike lift, it is not inflated just because a set is larger.")
+    st.caption(f"Only pairs and triples bought together more often than chance are listed: their lift vs "
+               f"independence is above 1 and at least the minimum lift ({result.config.min_lift:.1f}). They are "
+               "ranked by all-confidence: at least this share of the buyers of any one product in the set bought the "
+               "whole set. Unlike lift, it is not inflated just because a set is larger.")
     bundles = bundle_opportunities(result, state.best_sellers(), data.categories, top_n)
-    st.dataframe(bundles, hide_index=True, width="stretch", column_config=ui.column_config(bundles))
-    st.download_button("Download bundles (CSV)", bundles.to_csv(index=False), "bundle_opportunities.csv", "text/csv",
-                       icon=":material/download:")
+    if bundles.empty:
+        st.info("No product set passes the minimum support and minimum lift.", icon=":material/info:")
+    else:
+        st.dataframe(bundles, hide_index=True, width="stretch", column_config=ui.column_config(bundles))
+        st.download_button("Download bundles (CSV)", bundles.to_csv(index=False), "bundle_opportunities.csv",
+                           "text/csv", icon=":material/download:")
 
     st.subheader("Cross-selling opportunities")
     st.caption("Strongest one-to-one product pairs by lift, each shown once in its more reliable direction. "
@@ -51,7 +56,7 @@ def render() -> None:
         with columns[index % 3].container(border=True):
             st.markdown(f'<div class="bw-card-title">Group {index + 1}</div>', unsafe_allow_html=True)
             ui.chips(group)
-            st.caption("Categories: " + ", ".join(categories))
+            st.caption("Categories: " + ui.escape(", ".join(categories)))
     if groups:
         st.caption("Potential uses: shelf adjacency, store-layout reviews or themed promotions. Groups come from "
                    "community detection on the rule graph and change with the lift threshold.")

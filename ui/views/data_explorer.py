@@ -16,21 +16,51 @@ WIDE_TEMPLATE = "transaction_id,item_1,item_2,item_3\nT1001,Milk,Bread,Butter\nT
 
 def _handle_upload() -> None:
     file = st.file_uploader(
-        "Transaction CSV", type=["csv"], key="uploader",
+        "Transaction CSV", type=["csv", "txt", "tsv"], key="uploader",
         help=f"Long format (one row per product) or wide format (one row per transaction), up to {MAX_UPLOAD_MB} MB.",
     )
-    if file is None or file.file_id == st.session_state.last_upload_id:
+    if file is None:
+        st.session_state.pop("upload_error", None)
+        return
+    if file.file_id == st.session_state.last_upload_id:
+        # the same file is still selected: keep showing its error (if it was refused) until it is removed
+        failed_id, message = st.session_state.get("upload_error", (None, None))
+        if failed_id == file.file_id:
+            st.error(message, icon=":material/error:")
         return
     st.session_state.last_upload_id = file.file_id
     try:
         loaded = state.use_upload(file.name, file.getvalue())
     except DataValidationError as error:
-        st.error(f"This file could not be used: {error} The previous dataset is still active.",
-                 icon=":material/error:")
+        message = f"{file.name} could not be used: {error} The previous dataset is still active."
+        st.session_state.upload_error = (file.file_id, message)
+        st.error(message, icon=":material/error:")
         return
+    st.session_state.pop("upload_error", None)
     ui.flash(f"Loaded {file.name}: {loaded.report.valid_transactions:,} valid transactions and "
              f"{loaded.report.unique_products:,} products. Review the validation summary below.")
     st.rerun()
+
+
+def _generate_panel() -> None:
+    st.markdown('<div class="bw-card-title">Or generate synthetic sample data</div>', unsafe_allow_html=True)
+    st.caption("Creates realistic-looking but entirely synthetic transactions with a fixed random seed.")
+    a, b, c = st.columns(3)
+    n_transactions = a.number_input("Transactions", 200, 50_000, 8_000, step=500)
+    n_products = b.number_input("Products", 8, len(CATALOG), len(CATALOG))
+    seed = c.number_input("Random seed", 0, 99_999, 42)
+    left, right = st.columns(2)
+    if left.button("Generate sample data", type="primary", icon=":material/auto_awesome:"):
+        with st.spinner(f"Generating {int(n_transactions):,} synthetic transactions..."):
+            loaded = state.use_generated(int(n_transactions), int(n_products), int(seed))
+        ui.flash(f"Generated {loaded.report.valid_transactions:,} synthetic transactions.")
+        st.rerun()
+    if right.button("Use demo data", icon=":material/restart_alt:"):
+        if state.use_demo():
+            ui.flash("Switched back to the bundled synthetic demo data.")
+        else:
+            ui.flash("The bundled demo data is already in use.", "info")
+        st.rerun()
 
 
 def render() -> None:
@@ -44,8 +74,14 @@ def render() -> None:
                 "- **Long format**: one row per product in a transaction. Required columns: `transaction_id`, "
                 "`product_name`. Optional: `category`, `quantity`, `unit_price`, `transaction_date`, `customer_id`.\n"
                 "- **Wide format**: one row per transaction. Columns `transaction_id`, `item_1`, `item_2`, ...\n"
-                "- Common alternative names such as `invoice_no`, `order_id`, `item` or `product` are recognised.\n"
-                "- Blank products, missing transaction IDs and duplicate rows are removed and listed for download."
+                "- Common alternative names such as `invoice_no`, `InvoiceNo`, `order_id`, `item`, `product` or "
+                "`Description` are recognised (capitalisation and spacing do not matter).\n"
+                "- Comma, semicolon, tab and pipe separators, and UTF-8, UTF-16 and Windows-1252 text are read "
+                "automatically.\n"
+                "- Blank products, missing transaction IDs and duplicate rows are removed and listed for download. "
+                "Rows with a negative quantity are returns or cancellations and are removed too.\n"
+                "- Dates may be `yyyy-mm-dd`, `dd/mm/yyyy` or `mm/dd/yyyy`; if the order of day and month cannot be "
+                "told, day/month/year is used and a warning says so."
             )
             left, right = st.columns(2)
             left.download_button("Long-format template", LONG_TEMPLATE, "basketwise_long_template.csv", "text/csv",
@@ -53,21 +89,7 @@ def render() -> None:
             right.download_button("Wide-format template", WIDE_TEMPLATE, "basketwise_wide_template.csv", "text/csv",
                                   icon=":material/download:")
     with generate_column.container(border=True):
-        st.markdown('<div class="bw-card-title">Or generate synthetic sample data</div>', unsafe_allow_html=True)
-        st.caption("Creates realistic-looking but entirely synthetic transactions with a fixed random seed.")
-        a, b, c = st.columns(3)
-        n_transactions = a.number_input("Transactions", 200, 50_000, 8_000, step=500)
-        n_products = b.number_input("Products", 8, len(CATALOG), len(CATALOG))
-        seed = c.number_input("Random seed", 0, 99_999, 42)
-        left, right = st.columns(2)
-        if left.button("Generate sample data", type="primary", icon=":material/auto_awesome:"):
-            loaded = state.use_generated(int(n_transactions), int(n_products), int(seed))
-            ui.flash(f"Generated {loaded.report.valid_transactions:,} synthetic transactions.")
-            st.rerun()
-        if right.button("Use demo data", icon=":material/restart_alt:"):
-            state.use_demo()
-            ui.flash("Switched back to the bundled synthetic demo data.")
-            st.rerun()
+        _generate_panel()
 
     data = state.data()
     report = data.report
