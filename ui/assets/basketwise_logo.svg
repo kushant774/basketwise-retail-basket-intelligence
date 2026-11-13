@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="184" height="36" viewBox="0 0 184 36">
+  <rect x="0" y="2" width="32" height="32" rx="8" fill="#2a78d6"/>
+  <path d="M8 15h16l-1.6 9.2a2 2 0 0 1-2 1.6h-8.8a2 2 0 0 1-2-1.6z" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+  <path d="M11.5 15l3-5M20.5 15l-3-5" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M13 19v3.5M16 19v3.5M19 19v3.5" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"/>
+  <text x="42" y="24.5" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#1f2328">Basket<tspan fill="#2a78d6">Wise</tspan></text>
+</svg>

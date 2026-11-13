@@ -1,0 +1,139 @@
+# BasketWise — Interview preparation
+
+These answers match the code in this repository. Before an interview, run the app, open each module named here and rerun the evaluation yourself, so you can explain every point from first-hand experience.
+
+## What I built, what I used from libraries, and what AI assistance contributed
+
+| Area | Who or what |
+|---|---|
+| Product idea, requirements, constraints, acceptance criteria | Me (the product brief and the review decisions) |
+| Apriori, FP-Growth, one-hot encoding, rule metrics | **mlxtend** library (`TransactionEncoder`, `apriori`, `fpgrowth`, `association_rules`) |
+| Community detection for merchandising groups | **NetworkX** library |
+| Charts and app framework | **Plotly**, **Streamlit** |
+| Project code: data validation, synthetic data generator, settings, rule ranking and explanations, recommender and fallback, evaluation framework, insights, reports, app pages, CLI, tests | Written for this project with substantial **AI coding assistance** (Claude Code), directed by my brief; I reviewed the results and am responsible for being able to explain them |
+| Verification | 114 automated tests, a browser walkthrough and a clean-environment install, all run during development; rerun them yourself before relying on them |
+
+**An honest one-line version:** "I specified and directed BasketWise and used an AI coding assistant to implement it. The mining algorithms come from mlxtend; the product logic, evaluation and app are this project's own code."
+
+## Questions and answers
+
+**1. What is BasketWise?**
+A local web app that turns retail transaction data into product associations, explained recommendations, bundle ideas, and an honest check of whether those recommendations beat simply suggesting best sellers.
+
+**2. What problem does it solve?**
+Retailers have transaction data but rarely know which products are bought together. BasketWise answers "what should we suggest, place together or bundle?" without the user needing to know Python or association-rule metrics.
+
+**3. Who are its target users?**
+Small shop owners, supermarket managers, retail analysts, and merchandising and inventory teams. The personas in the requirements are assumptions; there was no user research and the product has no real users yet.
+
+**4. Why did you build it?**
+To show product thinking end to end on a real retail problem: define users and requirements, build something usable, and measure it honestly against a baseline, not just show attractive charts.
+
+**5. What is market basket analysis?**
+Finding sets of products that often appear in the same transaction, and expressing them as rules of the form "baskets with A often also contain B", each with a strength score.
+
+**6. What are Apriori and FP-Growth?**
+Both find every itemset whose support is above a threshold.
+- **Apriori** grows itemsets one size at a time. It prunes candidates that have an infrequent subset, because every subset of a frequent set must also be frequent.
+- **FP-Growth** compresses the transactions into a prefix tree and mines it without generating candidates.
+
+Both return the same itemsets; the tests check this. In my benchmark, Apriori was slightly faster at the default settings, but FP-Growth was 2.5–7× faster at very low support. That is why FP-Growth is the default.
+
+**7. Why did you use mlxtend?**
+It is a mature, widely used implementation. Rewriting these algorithms would add risk without adding product value. The value is in what surrounds them: validation, explanations, recommendations and evaluation. I verified that the library's metrics are correct with hand calculations and a brute-force recount in the tests.
+
+**8. What are support, confidence and lift?**
+- **Support:** the share of all transactions containing the products.
+- **Confidence(A → B):** of the baskets with A, the share that also had B.
+- **Lift:** confidence divided by B's overall support, so how many times more often B appears with A than usual.
+
+Lift above 1 indicates a positive association in the data, not causation. Example from the demo: 41 % of baskets with Milk and Bread also had Butter, which is 3.8 times Butter's usual rate.
+
+**9. How does the recommendation engine work?** (`market_basket/recommend.py`)
+1. Take rules with a single product on the right-hand side and sort them by confidence (lift or support can be chosen instead).
+2. For the basket, use each rule whose left-hand products are all in the basket, skipping products already in the basket.
+3. Suggest each product once, through its best rule, with a reason and the rule's numbers.
+4. If there are not enough suggestions, fill the remaining slots with best sellers, labelled as such.
+
+**10. Why use a best-seller fallback?**
+Some baskets have no applicable rule. Without a fallback, rules alone produced a suggestion in 98.8 % of evaluated cases. With the fallback this rises to 100 %, and Hit Rate@5 goes from 50.2 % to 53.1 %. The label keeps it honest: those suggestions are not based on the basket.
+
+**11. How did you evaluate the recommendations?** (`market_basket/evaluation.py`)
+1. Split the transactions 80/20 at random with a fixed seed.
+2. Mine rules and best sellers on the training part only.
+3. In each test basket with at least two products, hide each product in turn, recommend from the rest, and check whether the hidden product is in the top k.
+4. Repeat on 5 or 10 splits and compare four methods with the best-seller baseline.
+
+The tests guard against leakage: they check that mining only ever sees the training data, and that products seen only in the test set are never recommended.
+
+**12. What is Hit Rate@3?**
+The share of test cases where the hidden product appears in the top 3 suggestions. On the demo data:
+- best sellers: 19.7 %
+- confidence-ranked rules with fallback: 43.5 %
+
+These are means over 5 splits, and the rule methods won on every split.
+
+**13. Why can lift-based recommendations underperform?**
+Lift rewards unusual pairings. A rare product that almost always appears with another gets a very high lift, even though few customers buy it. Ranking by lift therefore puts niche items first, which is less likely to match what a typical customer adds. On the demo, lift ranking scored 38.4 % at Hit Rate@3 against 42.5 % for confidence. Lift is still useful for finding cross-sell ideas.
+
+**14. What were the most difficult problems?**
+- **Making the evaluation honest.** Preventing leakage, choosing a baseline, and being clear that synthetic data with planted patterns flatters the method.
+- **Messy input data.** Two layouts, alias column names, comma, semicolon, tab and pipe separators, blank and duplicate rows, capitalisation variants, and a pandas behaviour that silently misreads rows longer than the header. A generated demo file with known injected problems lets the tests check that every problem is counted exactly.
+- **Bundle scoring.** Lift against independence grows with set size, so I used all-confidence to compare pairs and triples fairly.
+- **Small datasets.** Interface tests found a slider that crashed on very small catalogues, which I fixed.
+
+**15. What would you improve next?**
+- Test on real retail data (with permission).
+- Evaluate by time (train on past months, test on later ones).
+- Add margin-aware ranking.
+- Add significance filtering for rules.
+- Build a simple A/B testing workflow to measure real impact.
+
+**16. How would you measure real business impact?**
+With a controlled experiment, comparing customers who see recommendations with those who do not.
+- Primary metric: average basket value or items per basket.
+- Secondary metrics: the attach rate of suggested products, and margin.
+- Guardrails: checkout time, and returns or complaints.
+
+Offline hit rate only shows relevance, not extra sales.
+
+**17. How would you conduct an A/B test?**
+1. Randomly assign customers or checkout sessions to control (no suggestions or best sellers) and treatment (BasketWise suggestions).
+2. Fix the primary metric and the minimum effect worth detecting, and calculate the sample size.
+3. Run for full weekly cycles.
+4. Check guardrails, and compare with a confidence interval.
+5. Watch for novelty effects before rolling out.
+
+**18. What would you prioritise with one more month?**
+1. Pilot with one retailer's real export, and fix whatever the data reveals.
+2. Add a time-based evaluation.
+3. Make the Evaluation Lab show results per category.
+4. Design the A/B test with the retailer.
+
+Real data and real feedback come before new features.
+
+**19. How would you onboard a retailer?**
+1. Ask for one month of billing export as a CSV.
+2. Load it on the Data Explorer page and review the validation report together.
+3. Agree thresholds on the Association Rules page.
+4. Pick two or three cross-sell or bundle candidates to test in store.
+5. Agree up front how success will be measured.
+
+The downloadable templates and validation warnings are designed for exactly this first session.
+
+**20. How would you decide whether to add a new feature?**
+Ask which user problem it solves and how often it occurs, whether evidence shows the need (requests, usage data, failed tasks), what it costs to build and maintain, and how we would measure that it worked. For example, I would add margin-aware ranking only if retailers said that low-margin suggestions are a real problem.
+
+## Numbers to remember (demo data, default settings)
+
+| Item | Value |
+|---|---|
+| Synthetic transactions, products, categories | 8,000 · 47 · 8 (seed 42) |
+| Default thresholds | support 1 %, confidence 20 %, lift 1.2, at most 3 products |
+| Frequent itemsets / rules | 265 / 262 |
+| Hit Rate@3: best sellers vs confidence + fallback | 19.7 % vs 43.5 % (5 splits) |
+| Hit Rate@5: best sellers vs confidence + fallback | 30.1 % vs 53.1 % |
+| Coverage: best sellers vs rules | 26 % vs 77 % of products |
+| Automated tests | 114 |
+
+Always add: "the demo data is synthetic with planted associations, so real data would show a smaller gap."
