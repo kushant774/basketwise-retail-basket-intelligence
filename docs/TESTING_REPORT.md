@@ -102,6 +102,13 @@ The real-world validation was developed on the branch `feature/uci-real-world-va
 - `pip check`: no broken requirements.
 - `pip-audit -r requirements.txt`: no known vulnerabilities.
 
+**Fresh clone.** The feature branch was cloned into an empty folder and checked step by step:
+1. A new Python 3.13 environment was created, and `pip install -r requirements.txt` ran in it; `pip check` was clean.
+2. `python -m pytest`: 247 passed.
+3. `evaluate --splits 5` and `rules` reproduced the synthetic benchmark (Hit Rate@3 0.1971 / 0.4348; 265 itemsets, 262 rules).
+4. `scripts/download_uci_online_retail.py` downloaded the dataset again from UCI. The ZIP, the spreadsheet and the converted CSV had the same SHA-256 as the first download.
+5. `uci-prepare` and `uci-evaluate` reproduced `docs/real_world/`. Every CSV and the scored cases are identical, and the JSON and Markdown differ only in the generation and download times.
+
 ## Static checks
 
 `ruff` (run from a separate environment, line length 120):
