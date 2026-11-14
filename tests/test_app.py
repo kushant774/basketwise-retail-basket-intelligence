@@ -287,6 +287,49 @@ def test_use_demo_data_when_it_is_already_active_resets_nothing():
     assert "already in use" in texts(at)
 
 
+def real_world_page(path) -> AppTest:
+    """The Evaluation Lab with the real-world tab pointed at `path` (a fixture instead of the downloaded file)."""
+    script = ("import streamlit as st\nfrom ui import components, state\nfrom ui.views import evaluation_lab\n"
+              "components.inject_css()\nstate.init()\nevaluation_lab.render()\n")
+    at = AppTest.from_string(script, default_timeout=TIMEOUT)
+    at.session_state["uci_path"] = str(path)
+    return at.run()
+
+
+def test_real_world_tab_explains_how_to_download_a_missing_dataset(tmp_path):
+    at = real_world_page(tmp_path / "missing.csv")
+    assert not at.exception
+    assert [tab.label for tab in at.tabs] == ["Random-split benchmark (active dataset)",
+                                              "Real-world validation (UCI data, split by time)"]
+    assert "has not been downloaded yet" in texts(at)
+    assert any("download_uci_online_retail.py" in block.value for block in at.code)
+    assert "CC BY 4.0" in texts(at) and "must not be combined" in texts(at)
+    labelled(at.button, "Run evaluation").click().run()   # the random-split benchmark still works beside it
+    assert not at.exception and any("hit rate@3" in df.value.columns for df in at.dataframe)
+
+
+def test_real_world_tab_loads_runs_and_exports(uci_csv):
+    at = real_world_page(uci_csv)
+    assert not at.exception and "Results on the test period" not in texts(at)   # nothing runs before a click
+    labelled(at.button, "Load and check the dataset").click().run()
+    assert not at.exception
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["Valid invoices"] == "1,500" and metrics["Raw rows"] == "5,716"
+    assert any("step" in df.value.columns for df in at.dataframe)          # preprocessing summary
+    labelled(at.button, "Run chronological evaluation").click().run()
+    assert not at.exception
+    comparison = next(df.value for df in at.dataframe if "Association-rule recommender" in df.value.columns)
+    assert comparison["Metric"].tolist()[:4] == ["Hit Rate@3", "Precision@3", "Recall@3", "Coverage"]
+    metrics = {m.label: m.value for m in at.metric}
+    assert metrics["Best-seller Hit Rate@3"].endswith("%") and metrics["Association rules Hit Rate@3"].endswith("%")
+    labels = [d.proto.label for d in at.get("download_button")]
+    assert {"Download results (JSON)", "Download report (Markdown)", "Download all results (ZIP)"} <= set(labels)
+    assert "Limitations" in [h.value for h in at.subheader]
+    labelled(at.radio, "Test period").set_value("Fixed start date")
+    labelled(at.button, "Run chronological evaluation").click().run()   # no date chosen: a clear message
+    assert any("Choose the date" in e.value for e in at.error) and not at.exception
+
+
 def test_evaluation_shows_the_settings_it_used_and_a_search_without_matches_says_so():
     at = session("evaluation")
     labelled(at.slider, "Random splits").set_value(1)

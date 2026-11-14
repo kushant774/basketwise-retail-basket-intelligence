@@ -9,6 +9,7 @@ from market_basket.config import ALGORITHM_NAMES, MiningConfig
 from market_basket.evaluation import METHODS
 from ui import components as ui
 from ui import state
+from ui.views import real_world_validation
 
 BASELINE = METHODS[0]
 
@@ -51,8 +52,8 @@ def _limitations(is_synthetic: bool) -> None:
         "measure extra sales caused by the suggestion.",
         "Proving business impact needs a controlled experiment (an A/B test) that compares sales with and "
         "without recommendations.",
-        "Transactions are split at random, so the test does not check how well rules hold up as preferences "
-        "change over time.",
+        "Transactions are split at random, so this test does not check how well rules hold up as preferences "
+        "change over time. The real-world validation tab tests that, with a split by time on real data.",
     ]
     if is_synthetic:
         notes.insert(0, "This dataset is synthetic and was generated with deliberately planted product "
@@ -72,9 +73,21 @@ def _settings_text(config: MiningConfig) -> str:
 
 
 def render() -> None:
-    data = state.data()
     ui.page_header("Evaluation Lab", "Do the recommendations find what customers actually bought? "
                                      "Three methods compared against simply recommending best sellers.")
+    random_split, real_world = st.tabs(["Random-split benchmark (active dataset)",
+                                        "Real-world validation (UCI data, split by time)"])
+    with random_split:
+        _render_random_split()
+    with real_world:
+        real_world_validation.render()
+
+
+def _render_random_split() -> None:
+    """The original benchmark: repeated random splits of the active dataset (synthetic demo data by default)."""
+    data = state.data()
+    st.caption("Evaluates the dataset that is active in the app (the synthetic demo data unless you uploaded or "
+               "generated another file). Results here are separate from the real-world validation tab.")
     _methodology()
     config = state.config()
     with st.form("evaluation_settings", border=True):

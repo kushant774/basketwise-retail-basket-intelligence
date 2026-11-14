@@ -181,6 +181,43 @@ def rule_network(rules: pd.DataFrame, categories: dict[str, str] | None = None, 
     return _style(fig, f"Strongest product relationships (top {len(pairs)} pairs by lift)", height=520)
 
 
+def real_world_chart(summary: pd.DataFrame, intervals: dict, top_k: int, baseline: str, primary: str) -> go.Figure:
+    """Hit Rate@K per method on the chronological test period, with 95% bootstrap intervals if available."""
+    metric = f"hit rate@{top_k}"
+    values = summary.set_index("method")[metric]
+    colors = [NEUTRAL if m == baseline else BLUE if m == primary else "#86b6ef" for m in values.index]
+    error = None
+    if intervals:
+        low = pd.Series({m: intervals["hit_rate"][m][0] for m in values.index})
+        high = pd.Series({m: intervals["hit_rate"][m][1] for m in values.index})
+        error = dict(type="data", symmetric=False, array=(high - values) * 100, arrayminus=(values - low) * 100,
+                     color=MUTED, thickness=1.2)
+    # values go in the axis labels (not above the bars, where they would collide with the interval caps)
+    labels = [f"{m.replace(' + ', ' +<br>').replace('Rules ranked', 'Rules<br>ranked')}<br><b>{v:.1%}</b>"
+              for m, v in values.items()]
+    fig = go.Figure(go.Bar(x=labels, y=values * 100, marker_color=colors, error_y=error,
+                           customdata=list(values.index),
+                           hovertemplate="%{customdata}<br>" + f"Hit Rate@{top_k}" + ": %{y:.1f}%<extra></extra>"))
+    fig.update_xaxes(tickangle=0)
+    fig.update_yaxes(title_text=f"Hidden product found in top {top_k} (%)", rangemode="tozero")
+    title = f"Hit Rate@{top_k} on the test period" + (" (bars show 95% bootstrap intervals)" if intervals else "")
+    return _style(fig, title, height=420)
+
+
+def weekly_hit_rate_chart(weekly: pd.DataFrame, top_k: int, baseline: str, primary: str) -> go.Figure:
+    """Hit Rate@K per test week for the baseline and the association-rule recommender."""
+    fig = go.Figure()
+    for method, color, name in ((baseline, NEUTRAL, "Best-seller baseline"),
+                                (primary, BLUE, "Association-rule recommender")):
+        fig.add_scatter(x=weekly["week starting"], y=weekly[f"hit rate@{top_k}: {method}"] * 100,
+                        mode="lines+markers", name=name, line=dict(color=color, width=2), marker=dict(size=7),
+                        customdata=weekly[["cases", "invoices"]],
+                        hovertemplate="Week of %{x|%d %b %Y}: %{y:.1f}%<br>%{customdata[0]:,} cases from "
+                                      "%{customdata[1]:,} invoices<extra>" + name + "</extra>")
+    fig.update_yaxes(title_text=f"Hit Rate@{top_k} (%)", rangemode="tozero")
+    return _style(fig, f"Hit Rate@{top_k} per week of the test period", height=380)
+
+
 def evaluation_chart(summary: pd.DataFrame, ks: tuple[int, ...] = (3, 5)) -> go.Figure:
     fig = go.Figure()
     for k, color in zip(ks, (BLUE, ORANGE)):  # noqa: B905 - at most two cut-offs are charted
