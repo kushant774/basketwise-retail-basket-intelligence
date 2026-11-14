@@ -112,3 +112,40 @@ Each entry records a decision made while building the current version: the reaso
 
 - **Decision:** a file is labelled synthetic when every transaction ID and every customer ID has the generator's format (`SYN-T…`, `SYN-C…`), wherever the file comes from.
 - **Why:** the demo upload is itself generated data, and reports about it must carry the synthetic-data disclaimer. File names are not reliable, and requiring both ID formats in full means real data is not labelled synthetic by accident.
+
+## 18. Validate on real data from a citable source, without redistributing it
+
+- **Decision:** add a real-world validation on the UCI Online Retail dataset (Chen, 2015, CC BY 4.0). A script downloads the official ZIP from the UCI Machine Learning Repository, records the retrieval time and SHA-256 checksums, and converts the spreadsheet to CSV once. The raw data stays in an ignored folder; only summaries and results are committed, with attribution.
+- **Why:** the synthetic benchmark can only show that the pipeline recovers associations it planted. A public, citable real dataset tests the same code on noisy data that BasketWise did not generate. Keeping the 23 MB download out of Git keeps the repository small and makes the source of every number explicit.
+- **Alternatives:** committing the raw file (unnecessary, and harder to audit for changes), or other public basket datasets (UCI Online Retail has invoice times, which a time-based split needs).
+
+## 19. Identify UCI products by stock code, not description
+
+- **Decision:** a product is its stock code, trimmed and in upper case. The description is only a display name (the code's most frequent description), and labels show both.
+- **Evidence (data-quality report):** some descriptions belong to several stock codes (for example, cushion covers in different sizes), and many codes have several spellings of their description. Lower-case codes such as `85123a` almost always share a description with their upper-case twin. Matching by description would merge different products and split one product into several.
+
+## 20. Split by time, with a cutoff rule fixed before scoring
+
+- **Decision:** the test period is the latest 20 % of valid invoices, counted by invoice and moved back to the start of that day; every earlier invoice is training data. A fixed date can be given instead.
+- **Why:** rules are learned from the past and used on future baskets, so a random split (which mixes months) is optimistic about how patterns hold over time. Counting invoices, never scores, keeps the cutoff independent of results, and a midnight cutoff keeps whole days (and identical timestamps) on one side. The 80/20 proportion matches the synthetic benchmark.
+- **Consequence:** on the UCI data the test period falls in the pre-Christmas peak (late October to 9 December 2011), which differs from most of the training year. That is part of what a time-based test should expose, and the report says so.
+
+## 21. Choose thresholds on a validation period inside the training period
+
+- **Decision:** candidate thresholds (minimum support 0.5 %, 1 % or 2 %; minimum confidence 10 %, 20 % or 30 %; minimum lift 1.2) are compared on the latest 20 % of the training invoices, with rules learned from the earlier training invoices only. The highest Hit Rate@3 of the default recommender wins; ties go to the higher support, then confidence. The chosen setting is then re-learned on the whole training period and scored once on the test period.
+- **Why:** the app's defaults were tuned for a 47-product synthetic catalogue; a 3,800-product real catalogue needs lower supports. Choosing on the test period would leak test information into the result. The grid, the split rule and K = 3 were fixed before the test period was first scored.
+
+## 22. Rules with one product on each side for the real-data experiment
+
+- **Decision:** the real-world experiment mines itemsets of at most 2 products.
+- **Evidence:** the UCI invoices are large (median 15 products, up to 1,106 after cleaning). On the training period, the guaranteed upper bound that BasketWise checks before mining exceeds the 200,000-itemset safety limit for 3-product itemsets at every support below 2 %, while 2-product mining takes a few seconds. Raising the safety limit was rejected: it protects the app's memory. Each generated report states, from a check on its own training period, whether longer rules would have been refused.
+
+## 23. Keep invoices without a customer ID; never count cancellations as purchases
+
+- **Decision:** rows without a customer ID are kept (the methods use invoices, not customers) and counted in the report; `--require-customer-id` drops them. Every row of a `C` invoice is removed whatever its quantity, and so is every zero or negative quantity elsewhere.
+- **Limitation, stated in the report:** the data does not link a cancellation to its original order, so an order that was later cancelled still counts as a basket.
+
+## 24. Score every product of every test invoice, and show the weighting effect
+
+- **Decision:** as in the synthetic benchmark, each product of each test invoice with at least two products is hidden once, and every method is scored on exactly these cases, including products never sold in training (a miss for everyone). The report adds an invoice-averaged hit rate, Precision@3 and Recall@3, and 95 % intervals from resampling whole test invoices.
+- **Why:** large invoices contribute hundreds of cases, so the invoice-averaged rate shows whether they drive the result. Cases from one invoice are not independent, so the bootstrap resamples invoices, with the same resamples for every method. With one hidden product per case, Recall@3 equals Hit Rate@3 and Precision@3 is Hit Rate@3 divided by 3; the report says this instead of presenting them as independent evidence.

@@ -11,7 +11,8 @@ These answers match the code in this repository. Before an interview, run the ap
 | Community detection for merchandising groups | **NetworkX** library |
 | Charts and app framework | **Plotly**, **Streamlit** |
 | Project code: data validation, synthetic data generator, settings, rule ranking and explanations, recommender and fallback, evaluation framework, insights, reports, app pages, CLI, tests | Written for this project with substantial **AI coding assistance** (Claude Code), directed by my brief; I reviewed the results and am responsible for being able to explain them |
-| Verification | 175 automated tests, a browser walkthrough and a clean-environment install, all run during development; rerun them yourself before relying on them |
+| Verification | 247 automated tests, a browser walkthrough and a clean-environment install, all run during development; rerun them yourself before relying on them |
+| Real-world validation (UCI Online Retail, split by time) | Same AI-assisted process: download script, preprocessing, chronological evaluation, CLI, app tab, tests and report, reviewed by an independent review agent before the single final run; the dataset is by Chen (2015), CC BY 4.0, and is not redistributed |
 
 **An honest one-line version:** "I specified and directed BasketWise and used an AI coding assistant to implement it. The mining algorithms come from mlxtend; the product logic, evaluation and app are this project's own code."
 
@@ -132,13 +133,34 @@ The downloadable templates and validation warnings are designed for exactly this
 Ask which user problem it solves and how often it occurs, whether evidence shows the need (requests, usage data, failed tasks), what it costs to build and maintain, and how we would measure that it worked. For example, I would add margin-aware ranking only if retailers said that low-margin suggestions are a real problem.
 
 **21. Isn't your 43 % circular, since you planted the associations yourself?**
-Partly, yes, and I say so. The result shows that the pipeline recovers known structure without leakage and beats a sensible baseline on the same cases. It does not show how much better rules are on real data, where associations are weaker. The next step is to rerun the same evaluation on a real export, ideally split by time.
+Partly, yes, and I say so. The result shows that the pipeline recovers known structure without leakage and beats a sensible baseline on the same cases. It does not show how much better rules are on real data, where associations are weaker. That is why I added a separate, time-based validation on the real UCI Online Retail data (question 23). I keep the two experiments apart and never quote them as one benchmark.
 
 **22. Why association rules and not collaborative filtering or embeddings?**
 The input is anonymous baskets, which is what small retailers' billing exports contain. Collaborative filtering needs stable customer histories, and embeddings need much more data and lose explainability. Rules give a reason for every suggestion, which matters to a shop owner. With customer IDs and more data, I would compare item-based collaborative filtering against these rules in the same Evaluation Lab.
 
 **23. Would it work on a real export, such as the UCI Online Retail dataset?**
-The data layer was built for this. It recognises the UCI headers (`InvoiceNo`, `Description`, `InvoiceDate` and so on), removes cancellations (negative quantities), reads Windows-1252 text and detects month/day dates. This is covered by tests with UCI-style rows, but I have not published results on the full dataset.
+Yes, and it is now measured, in a separate experiment. I learned rules and best sellers from invoices up to 25 October 2011, chose the thresholds on a validation period inside that training period, and tested on 26 October to 9 December 2011. On the same 116,322 leave-one-out cases, Hit Rate@3 was 7.6 % for the rules against 1.1 % for best sellers (95 % interval for the difference: +6.0 to +7.1 points). I always add three points. Both rates are low with 3,797 products, so the rules still missed 92 % of hidden products. Their weekly hit rate fell from 9.8 % to 5.7 % across the test period. And this is basket completion on one retailer's data, not next-purchase prediction or extra sales. See `docs/REAL_WORLD_VALIDATION.md`.
+
+**24. How did you prevent leakage in the time-based test?**
+- **Split by time:** every training invoice is earlier than every test invoice; the cutoff is a midnight, so no invoice or day is split.
+- **Training data only:** rules, best sellers and the list of candidate products come from training invoices only.
+- **Thresholds chosen on validation:** they were chosen on a validation period cut from the end of the training period, never on the test period.
+- **Protocol fixed in advance:** the protocol was fixed before the test period was first scored.
+- **Same cases for every method:** both methods are scored on exactly the same cases, and products that were never sold in training stay in the denominator as misses.
+- **Tests:** they check each point, for example by recording what the mining and popularity functions receive.
+
+**25. Why did you keep invoices without a customer ID, and why products by stock code?**
+A basket is an invoice, and the methods never use customer IDs, so dropping those invoices would only lose data. There is an option to drop them. Stock codes are the stable identifier. In the data, 68 descriptions belong to several different codes, and many codes have several spellings, so matching by description would merge different products.
+
+## Numbers to remember (real-world validation, UCI Online Retail; a separate experiment)
+
+| Item | Value |
+|---|---|
+| Raw rows → valid invoices, products | 541,909 → 19,773 invoices, 3,797 products |
+| Training / test periods | 1 Dec 2010 – 25 Oct 2011 (15,769 invoices) / 26 Oct – 9 Dec 2011 (4,004 invoices) |
+| Chosen thresholds (on validation) | support 0.5 %, confidence 20 %, lift 1.2, at most 2 products per rule |
+| Hit Rate@3: best sellers vs rules + fallback | 1.1 % vs 7.6 % on 116,322 cases (+6.6 points, 95 % interval +6.0 to +7.1) |
+| Coverage: best sellers vs rules | 2.2 % vs 12.4 % of training products |
 
 ## Numbers to remember (demo data, default settings)
 
@@ -150,6 +172,6 @@ The data layer was built for this. It recognises the UCI headers (`InvoiceNo`, `
 | Hit Rate@3: best sellers vs confidence + fallback | 19.7 % vs 43.5 % (5 splits) |
 | Hit Rate@5: best sellers vs confidence + fallback | 30.1 % vs 53.1 % |
 | Coverage: best sellers vs rules | 26 % vs 77 % of products |
-| Automated tests | 175 |
+| Automated tests | 247 |
 
 Always add: "the demo data is synthetic with planted associations, so real data would show a smaller gap."
