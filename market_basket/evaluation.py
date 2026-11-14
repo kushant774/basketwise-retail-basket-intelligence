@@ -74,7 +74,12 @@ def build_methods(train: list[list[str]], config: MiningConfig) -> dict[str, Rec
     """Recommenders built from training transactions only; all of them respect config.exclude."""
     rules = mine_rules(train, config).rules
     best_sellers = item_support(train)
-    exclude = config.exclude
+    return methods_from_rules(rules, best_sellers, config.exclude)
+
+
+def methods_from_rules(rules: pd.DataFrame, best_sellers: pd.Series,
+                       exclude: tuple[str, ...] = ()) -> dict[str, Recommender]:
+    """The compared methods, from rules and best sellers that were both computed on training data."""
     return {
         "Best-seller baseline": Recommender(rules.iloc[0:0], "confidence", best_sellers, exclude),
         "Rules ranked by confidence": Recommender(rules, "confidence", exclude=exclude),
