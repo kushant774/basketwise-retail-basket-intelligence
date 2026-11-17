@@ -41,12 +41,13 @@ BasketWise is a Python package (`market_basket`) with three front ends: a Stream
 | `recommend.py` | Matches rules to the basket, ranks them, gives one suggestion per product with a reason, and falls back to best sellers; ignored products are never suggested | `Recommender`, `compare_rankings` |
 | `evaluation.py` | Seeded splits, leave-one-out cases, metrics, repeated runs; ignored products treated the same way by every method | `evaluate`, `train_test_split`, `score` |
 | `insights.py` | Product popularity, categories, cross-sell pairs, bundles (lift filter, all-confidence ranking), merchandising groups (NetworkX communities), key insights | `bundle_opportunities`, `product_groups`, `key_insights` |
-| `plots.py` | Plotly charts with consistent category colours | `product_bar`, `rules_scatter`, `rule_network`, `evaluation_chart` |
+| `plots.py` | Plotly charts with consistent category colours | `product_bar`, `rules_scatter`, `rule_network`, `evaluation_chart`, `rolling_chart` |
 | `reporting.py` | Markdown report and ZIP export | `build_report`, `export_zip` |
 | `uci.py` | UCI Online Retail: reproducible download (checksums, manifest, retries), reading the CSV or `.xlsx`, the data-quality report, and preprocessing into invoice baskets with every removed row and its reason | `download_dataset`, `read_raw`, `data_quality_report`, `preprocess`, `preprocessing_table` |
 | `temporal.py` | Chronological evaluation for any invoice table: cutoff rule, split, threshold selection on a validation period inside training, leave-one-out scoring on the same cases for every method, metrics, paired invoice bootstrap, weekly results | `evaluate_chronological`, `cutoff_for_share`, `split_by_time`, `select_setting`, `score_cases` |
 | `real_world.py` | Ties `uci.py` and `temporal.py` together and writes the JSON, Markdown and CSV outputs used by the CLI and the app | `prepare`, `evaluate`, `results_dict`, `build_markdown`, `write_evaluation_outputs` |
-| `cli.py` | Commands: summary, validate, rules, recommend, insights, evaluate, report, uci-prepare, uci-evaluate | `main` |
+| `rolling.py` | Multi-cutoff (rolling-origin) check: monthly cutoffs, one `evaluate_chronological` run per fold on an expanding window, per-fold verdicts, pooled results and bootstrap, and its JSON, Markdown and CSV outputs | `monthly_cutoffs`, `evaluate_rolling`, `evaluate`, `build_markdown`, `write_outputs` |
+| `cli.py` | Commands: summary, validate, rules, recommend, insights, evaluate, report, uci-prepare, uci-evaluate, uci-rolling | `main` |
 
 ### Real-world validation path
 
@@ -63,7 +64,13 @@ temporal.py   cutoff (latest 20 % of invoices, at midnight) → train | test
               test  → leave-one-out cases → same cases for every method → metrics, bootstrap, weekly results
         │
 real_world.py  JSON + Markdown + CSV outputs ──► CLI (uci-prepare, uci-evaluate) · Evaluation Lab tab 2
+        │
+rolling.py    monthly cutoffs → for each fold: invoices before the next cutoff → evaluate_chronological
+              (its own validation, rules and best sellers) → per-fold rows, pooled cases, bootstrap
+              ──► CLI (uci-rolling) → outputs/real_world/rolling/ · published copy shown read-only in tab 2
 ```
+
+Each fold of `rolling.py` passes `evaluate_chronological` only the invoices before the next cutoff, so a fold can never see a later month, and every fold inherits the single split's leakage guarantees (both are tested).
 
 Scoring the large test period uses `Recommender.for_basket`, which keeps only the rules whose left-hand side lies inside the invoice. A rule can only apply to a query that contains its left-hand side, so for every leave-one-out query of that invoice the restricted recommender returns exactly what the full one returns (tested on the demo data). The rules are filtered once per invoice instead of once per hidden product.
 
@@ -80,7 +87,7 @@ Scoring the large test period uses `Recommender.for_basket`, which keeps only th
 - **Widget values versus session state.** Streamlit deletes a widget's value when its page is not shown. Anything that must survive a page change (the basket, the settings, the evaluation) is therefore kept in plain session-state keys, and widgets copy their values into them through callbacks. This is why the basket is still there after visiting another page.
 - **Applying settings.** The settings form takes its default values from the current settings. After **Apply settings**, the page reruns at once, so the form is rebuilt from the new settings before the next change and the sidebar (drawn before the page) shows the new rule count. Without this rerun, a second Apply in a row was ignored.
 - When a user uploads a new file, it is validated first. The active dataset only changes if validation succeeds, so a bad upload never breaks the current analysis, and the error stays visible until the file is removed.
-- The Evaluation Lab has two tabs: the original random-split benchmark of the active dataset, and the real-world validation (`ui/views/real_world_validation.py`). The second tab does nothing heavy until the user clicks **Load and check the dataset**; the prepared data and each evaluation result are kept with `st.cache_resource` (one shared, read-only copy instead of a copy per access) and keyed by the file's path, size and modification time and by the settings.
+- The Evaluation Lab has two tabs: the original random-split benchmark of the active dataset, and the real-world validation (`ui/views/real_world_validation.py`). The second tab does nothing heavy until the user clicks **Load and check the dataset**; the prepared data and each evaluation result are kept with `st.cache_resource` (one shared, read-only copy instead of a copy per access) and keyed by the file's path, size and modification time and by the settings. Above the dataset controls, a read-only panel shows the published multi-cutoff results from `docs/real_world/rolling/rolling_folds.csv` (nothing is run; the panel is hidden if the file is missing).
 - `ui/components.py` provides shared page headers, metric cards, table formats, chart display, escaping of product names shown in Markdown or HTML, and one-off messages that survive a rerun.
 
 ## Data flow for one recommendation

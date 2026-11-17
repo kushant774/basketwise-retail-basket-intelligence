@@ -11,7 +11,7 @@ These answers match the code in this repository. Before an interview, run the ap
 | Community detection for merchandising groups | **NetworkX** library |
 | Charts and app framework | **Plotly**, **Streamlit** |
 | Project code: data validation, synthetic data generator, settings, rule ranking and explanations, recommender and fallback, evaluation framework, insights, reports, app pages, CLI, tests | Written for this project with substantial **AI coding assistance** (Claude Code), directed by my brief; I reviewed the results and am responsible for being able to explain them |
-| Verification | 247 automated tests, a browser walkthrough and a clean-environment install, all run during development; rerun them yourself before relying on them |
+| Verification | 270 automated tests (also run by GitHub Actions on every pull request), a browser walkthrough and a clean-environment install; rerun them yourself before relying on them |
 | Real-world validation (UCI Online Retail, split by time) | Same AI-assisted process: download script, preprocessing, chronological evaluation, CLI, app tab, tests and report, reviewed by an independent review agent before the single final run; the dataset is by Chen (2015), CC BY 4.0, and is not redistributed |
 
 **An honest one-line version:** "I specified and directed BasketWise and used an AI coding assistant to implement it. The mining algorithms come from mlxtend; the product logic, evaluation and app are this project's own code."
@@ -152,6 +152,9 @@ Yes, and it is now measured, in a separate experiment. I learned rules and best 
 **25. Why did you keep invoices without a customer ID, and why products by stock code?**
 A basket is an invoice, and the methods never use customer IDs, so dropping those invoices would only lose data. There is an option to drop them. Stock codes are the stable identifier. In the data, 68 descriptions belong to several different codes, and many codes have several spellings, so matching by description would merge different products.
 
+**26. Isn't one test period, in the pre-Christmas peak, too thin to trust?**
+Yes, so I repeated the protocol at ten monthly cutoffs, March to December 2011. Each fold learned from every earlier invoice, chose its own thresholds on its own validation period, and was tested on the following month. I wrote the protocol down before running it. The rules beat best sellers in all ten months, and every fold's 95 % interval was above zero, with gains of +6.2 to +8.8 points. The March to September folds don't overlap the original test period; pooled, they give 9.5 % against 1.7 %. With rules retrained every month, October to December still scored lower than the summer, which points to the season rather than stale rules. I add that the folds aren't independent tests and the absolute hit rates stay low.
+
 ## Numbers to remember (real-world validation, UCI Online Retail; a separate experiment)
 
 | Item | Value |
@@ -161,6 +164,7 @@ A basket is an invoice, and the methods never use customer IDs, so dropping thos
 | Chosen thresholds (on validation) | support 0.5 %, confidence 20 %, lift 1.2, at most 2 products per rule |
 | Hit Rate@3: best sellers vs rules + fallback | 1.1 % vs 7.6 % on 116,322 cases (+6.6 points, 95 % interval +6.0 to +7.1) |
 | Coverage: best sellers vs rules | 2.2 % vs 12.4 % of training products |
+| Multi-cutoff check (10 monthly folds, Mar – Dec 2011) | rules ahead in all 10 folds, by +6.2 to +8.8 points; pooled 8.9 % vs 1.4 % (Mar – Sep only: 9.5 % vs 1.7 %) |
 
 ## Numbers to remember (demo data, default settings)
 
@@ -172,6 +176,6 @@ A basket is an invoice, and the methods never use customer IDs, so dropping thos
 | Hit Rate@3: best sellers vs confidence + fallback | 19.7 % vs 43.5 % (5 splits) |
 | Hit Rate@5: best sellers vs confidence + fallback | 30.1 % vs 53.1 % |
 | Coverage: best sellers vs rules | 26 % vs 77 % of products |
-| Automated tests | 247 |
+| Automated tests | 270 |
 
 Always add: "the demo data is synthetic with planted associations, so real data would show a smaller gap."

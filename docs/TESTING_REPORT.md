@@ -1,10 +1,15 @@
 # BasketWise — Testing report
 
-Last run on 14 November 2026 on Windows 11 with Python 3.13.14 and the versions pinned in `requirements.txt`.
+Last run on 18 November 2026 on Windows 11 with Python 3.13.14 and the versions pinned in `requirements.txt`, and by GitHub Actions on Ubuntu (see [Continuous integration](#multi-cutoff-check-and-continuous-integration-november-2026)).
 
 ## Automated tests
 
-Run with `python -m pytest`. Result: **247 passed**, with 0 failures and 0 skips (about 70 s). The real-world validation added 72 tests to the 175 of the previous release, and the release audit had added 61 to the earlier 114. No earlier test was removed, skipped or loosened.
+Run with `python -m pytest`. Result: **270 passed**, with 0 failures and 0 skips (about 85 s).
+- The multi-cutoff check added 23 tests to the 247 of the real-world validation.
+- Before that, the real-world validation added 72 to the 175 of the previous release, and the release audit added 61 to the earlier 114.
+- No earlier test was removed, skipped or loosened.
+
+On 18 November 2026, before any change for the multi-cutoff check, the 247 earlier tests were rerun on the feature branch: 247 passed.
 
 | File | Tests | What is covered |
 |---|---|---|
@@ -109,10 +114,34 @@ The real-world validation was developed on the branch `feature/uci-real-world-va
 4. `scripts/download_uci_online_retail.py` downloaded the dataset again from UCI. The ZIP, the spreadsheet and the converted CSV had the same SHA-256 as the first download.
 5. `uci-prepare` and `uci-evaluate` reproduced `docs/real_world/`. Every CSV and the scored cases are identical, and the JSON and Markdown differ only in the generation and download times.
 
+## Multi-cutoff check and continuous integration (November 2026)
+
+These tests were added on the same branch. Like the other real-world tests, they need no download.
+
+| File | Tests | What is covered |
+|---|---|---|
+| `test_rolling.py` | 22 | **Folds:**<br>- Monthly cutoffs start after the training months and stop at the last invoice; too few months is a clear error.<br>- Every later invoice is tested exactly once, every fold trains on all earlier invoices, and no fold receives an invoice from after its test month (recorded with a monkeypatch).<br>- A fold gives exactly the same result as the single-split protocol run on its own window.<br><br>**Summaries:**<br>- Pooled results weight every case once, and coverage is not pooled across different candidate universes.<br>- The early group holds only folds that end before the single-split cutoff.<br>- Verdicts follow the interval; given cutoffs are sorted, and errors name the fold.<br><br>**Command and report:**<br>- `uci-rolling` writes every file with consistent numbers and no customer IDs.<br>- Two runs are identical apart from the generation time.<br>- The report has all seven sections, the attribution and honest wording.<br>- Each command keeps its own output folder.<br>- Invalid options are usage errors.<br>- The "fixed protocol" claim needs the official file and every default.<br>- The limitations match the run: refused settings, grid edges, a short last fold, overlap with the single split. |
+| `test_app.py` (1 new) | 1 | The real-world tab shows the published multi-cutoff results without running anything, even before the dataset is downloaded, and hides the panel when the file is missing. |
+
+**Protocol order.**
+1. The protocol and its summaries were added to `docs/PRODUCT_DECISIONS.md` (decision 25) before the code was written.
+2. The code was tested on synthetic UCI-style data only.
+3. `uci-rolling` was then run on the real file.
+4. While that first run was in progress, two report sentences were reworded, before any of its results had been seen. After it finished, two limitation notes were added: settings refused by the safety limit (folds 1 to 3), and the chosen support at the edge of the grid (folds 4 to 10). No setting or number changed.
+5. The run was repeated with the final code, and its output is what `docs/real_world/rolling/` holds.
+
+**Runs on the real data** (official file, spreadsheet SHA-256 `43465a06…`):
+- The two runs took 8 min 38 s and 8 min 18 s.
+- Their `rolling_folds.csv`, `rolling_pooled_summary.csv`, `rolling_threshold_selection.csv` and `rolling_cases.csv.gz` are byte-identical.
+- Their JSON files differ only in the generation time and the limitation notes added in between.
+
+**Continuous integration.** `.github/workflows/tests.yml` runs on every pull request and every push to `main`. It installs `requirements.txt` on Ubuntu with Python 3.13, runs `pip check`, and then runs `python -m pytest`.
+
 ## Static checks
 
 `ruff` (run from a separate environment, line length 120):
 - **No pyflakes errors**: no unused imports and no undefined names.
+- **Multi-cutoff check (ruff 0.17.5):** the new files have no findings. Each changed file has exactly as many findings as on the branch before the change.
 - The remaining notices are style preferences of ruff's newer default rules, such as `dict()` calls and implicit string concatenation. They were deliberately left alone, along with long lines in older files and the complexity of `generate_transactions`. Restructuring the generator could change its random stream and therefore the published datasets.
 
 ## Browser verification

@@ -51,7 +51,7 @@ The screenshots were captured from the running app with headless Chrome. The Dat
 | Charts | Plotly | Interactive charts |
 | App | Streamlit | Eight-page local web app |
 | Real data | openpyxl | Reading the official UCI Online Retail spreadsheet (real-world validation only) |
-| Tests | pytest, Streamlit AppTest | 247 automated tests, including interface tests across pages |
+| Tests | pytest, Streamlit AppTest, GitHub Actions | 270 automated tests, including interface tests across pages, run on GitHub for every pull request |
 
 ## Quick start
 
@@ -74,13 +74,14 @@ Other entry points:
 .venv\Scripts\python -m market_basket summary              # command-line tools: summary, validate, rules,
 .venv\Scripts\python -m market_basket recommend Milk Bread #   recommend, insights, evaluate, report
 .venv\Scripts\python -m market_basket evaluate --splits 5
-.venv\Scripts\python -m pytest                             # 247 automated tests
+.venv\Scripts\python -m pytest                             # 270 automated tests
 .venv\Scripts\jupyter notebook notebooks/basketwise_walkthrough.ipynb
 
 # real-world validation (downloads the public UCI Online Retail data, about 23 MB, into Data/external/)
 .venv\Scripts\python scripts/download_uci_online_retail.py
 .venv\Scripts\python -m market_basket uci-prepare       # data-quality report and preprocessing summary
 .venv\Scripts\python -m market_basket uci-evaluate      # chronological evaluation -> outputs/real_world/
+.venv\Scripts\python -m market_basket uci-rolling       # the same evaluation at monthly cutoffs -> outputs/real_world/rolling/
 ```
 
 ## Using your own data
@@ -240,7 +241,14 @@ Every rule-based method beat the baseline in all 5 splits. The standard deviatio
 - Its weekly hit rate fell from 9.8 % to 5.7 % across the test period, as the pre-Christmas season moved further from the training data.
 - With one hidden product per case, Recall@3 equals Hit Rate@3, and Precision@3 is a third of it.
 
-**What it does not show:** next-purchase prediction, extra sales or revenue (that needs an A/B test), real customer adoption, or results for other shops and periods. It is one retailer and one split.
+**Does it hold at other times?** The same protocol was repeated at ten monthly cutoffs (test months March to December 2011). Each fold learned only from earlier invoices and chose its own thresholds. The protocol was fixed in [decision 25](docs/PRODUCT_DECISIONS.md) before it was run.
+- **Every fold:** the recommender beat the best sellers in all ten months, and every fold's 95 % interval is above zero. The difference ranged from +6.2 to +8.8 points.
+- **Outside the pre-Christmas period:** the March to September folds share no test invoice with the split above. Pooled, they give 9.5 % against 1.7 % (+7.8 points, 95 % interval +7.6 to +8.0).
+- **The season:** with rules retrained every month, October to December still scored lower (7.2–8.3 %) than June to September (9.5–10.6 %). This points to the season rather than rule age.
+
+The folds are not independent tests, and the absolute hit rates stay low. Details: [multi-cutoff section](docs/REAL_WORLD_VALIDATION.md#does-it-hold-at-other-times-multi-cutoff-check) and the [generated report](docs/real_world/rolling/rolling_evaluation.md).
+
+**What it does not show:** next-purchase prediction, extra sales or revenue (that needs an A/B test), real customer adoption, or results for other shops or years. It is one retailer, over one year.
 
 ![Real-world validation in the Evaluation Lab](docs/images/real_world_validation.png)
 
@@ -252,24 +260,26 @@ Run it with the three `real-world validation` commands in the [Quick start](#qui
 app.py                       Streamlit entry point
 ui/                          state.py (session + caching), components.py, navigation.py, views/ (8 pages)
 market_basket/               config, synthetic_data, data, mining, recommend, evaluation, insights, plots,
-                             reporting, cli; uci, temporal, real_world (real-world validation)
+                             reporting, cli; uci, temporal, real_world, rolling (real-world validation)
 Data/synthetic_retail_transactions.csv   generated demo data (8,000 transactions, 47 products, 8 categories)
 Data/demo_upload_with_issues.csv         generated upload with known data problems (for the demo)
 scripts/generate_data.py     regenerates the demo data
 scripts/benchmark.py         Apriori vs FP-Growth timing
 scripts/download_uci_online_retail.py   downloads the UCI Online Retail data (into Data/external/, ignored by Git)
 notebooks/basketwise_walkthrough.ipynb   step-by-step analysis using the package
-tests/                       247 pytest tests (data, mining, recommendations, evaluation, real-world validation,
+tests/                       270 pytest tests (data, mining, recommendations, evaluation, real-world validation,
                              reports, CLI, app)
 docs/                        product, architecture, algorithm, evaluation, testing and interview documents
 docs/real_world/             generated real-world validation report, results JSON and summaries
+docs/real_world/rolling/     generated multi-cutoff report, results JSON and per-fold summaries
+.github/workflows/tests.yml  runs the test suite on GitHub for every pull request and push to main
 ```
 
 ## Limitations
 
 - The demo data is synthetic. Its associations are cleaner and stronger than real retail data (several lifts above 10), so real results will differ.
 - Association rules describe co-occurrence, not causation, and offline hit rate is not business impact.
-- The synthetic benchmark splits transactions at random. The real-world validation splits by time, but it covers one retailer, one year and one split, and its rules have at most two products. The rules are learned once; there is no periodic re-mining.
+- The synthetic benchmark splits transactions at random. The real-world validation splits by time and repeats the split at ten monthly cutoffs, but it covers one retailer and one year, and its rules have at most two products. The app learns rules once and has no scheduled re-mining; only the offline multi-cutoff check re-mines every month.
 - Products below the minimum support never appear in rules, and recommendations cannot use price, margin, stock or customer history.
 - When every date in a file could be read either way (for example 05/01/2025), day/month/year is assumed; a US file with no day above 12 would be misread, and a warning says so.
 - To stay responsive, settings that could produce more than 200,000 frequent itemsets or 500,000 candidate rules are refused with a message (the itemset limit is checked before mining starts). On large catalogues, keep a maximum rule size.
@@ -294,6 +304,10 @@ The current code was developed with AI coding assistance and reviewed and tested
 
 The real-world validation uses the UCI Online Retail dataset (Chen, 2015, CC BY 4.0), which is downloaded from the UCI Machine Learning Repository and not redistributed here.
 
+## Licence
+
+BasketWise has no open-source licence: all rights are reserved by the author. You may read the code on GitHub, but reusing, copying or redistributing it needs the author's permission. The UCI dataset keeps its own CC BY 4.0 licence.
+
 ## Documentation
 
 - [Demo walkthrough](docs/DEMO_WALKTHROUGH.md)
@@ -303,7 +317,7 @@ The real-world validation uses the UCI Online Retail dataset (Chen, 2015, CC BY 
 - [Data dictionary](docs/DATA_DICTIONARY.md)
 - [Algorithm explanation](docs/ALGORITHM_EXPLANATION.md)
 - [Evaluation report](docs/EVALUATION_REPORT.md) (synthetic benchmark)
-- [Real-world validation](docs/REAL_WORLD_VALIDATION.md) and its [generated report](docs/real_world/real_world_evaluation.md)
+- [Real-world validation](docs/REAL_WORLD_VALIDATION.md), its [generated report](docs/real_world/real_world_evaluation.md) and the [multi-cutoff report](docs/real_world/rolling/rolling_evaluation.md)
 - [Testing report](docs/TESTING_REPORT.md)
 - [Interview preparation](docs/INTERVIEW_PREPARATION.md)
 - [Originality and AI assistance](docs/ORIGINALITY_AND_AI_ASSISTANCE.md)
