@@ -1,0 +1,19 @@
+step,count
+Original rows,541909
+Removed: missing invoice number,0
+Removed: cancellation invoice (invoice number starts with C),9288
+"Removed: non-sale invoice (invoice number with another letter, e.g. A = bad-debt adjustment)",3
+Removed: missing or invalid invoice date,0
+Removed: missing stock code,0
+"Removed: non-merchandise line (postage, carriage, fees, discounts, manual entries, samples, vouchers)",2440
+"Removed: missing, zero or negative quantity (return or stock adjustment)",1336
+"Removed: missing, zero or negative unit price",1161
+Valid purchase rows,527681
+Removed: exact duplicate of an earlier row,5221
+Merged: repeated product in the same invoice (merged into one basket line),5250
+Basket lines (invoice-product pairs),517210
+Valid invoices (transactions),19773
+Invoices with two or more products,18267
+Unique products (stock codes),3797
+Unique customers,4334
+Valid invoices without a customer ID (kept),1371

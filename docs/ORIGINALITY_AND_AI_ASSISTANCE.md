@@ -25,6 +25,7 @@ It uses established open-source libraries for standard algorithms:
 - **mlxtend**: `TransactionEncoder`, `apriori`, `fpgrowth`, `association_rules`
 - **NetworkX**: greedy modularity community detection
 - **pandas, NumPy, Plotly and Streamlit**
+- **openpyxl**: reading the official UCI spreadsheet (real-world validation only)
 
 These libraries are used, not reimplemented, and the documentation says so wherever they appear. The algorithms (Apriori, FP-Growth, association-rule metrics) are standard and widely documented. The five-basket example in the tests is a well-known textbook example (Tan, Steinbach and Kumar), and it is cited.
 
@@ -53,3 +54,15 @@ The current implementation was developed with substantial help from an AI coding
 At the author's request, the finished project was audited in AI-assisted sessions. Separate review agents checked algorithm correctness, code quality and data handling, and the Streamlit interface, and each finding was reproduced before it was fixed. The resulting fixes and their regression tests are described in `docs/TESTING_REPORT.md`; the same assistant implemented them, and the author authorised the changes and their publication. The audit independently recomputed every rule metric and reproduced every published evaluation number. It confirmed that the mlxtend-provided algorithms were used correctly, so they were not changed.
 
 No result in the documentation is hand-written. Every number comes from running the code in this repository.
+
+### Real-world validation extension (November 2026)
+
+At the author's request, a chronological validation on real data was added in a further AI-assisted session (Claude Code), on a separate branch for the author's review. The assistant inspected the dataset, wrote the download script, the preprocessing, the time-based evaluation, the CLI commands, the Evaluation Lab tab, the tests and the documentation, and ran the evaluation. The author set the requirements: an official source, a chronological split, no leakage, the same cases for every method, honest reporting, and no changes to the published synthetic benchmark.
+
+**Third-party data.** The real-world validation uses the *Online Retail* dataset: Chen, D. (2015). Online Retail [Dataset]. UCI Machine Learning Repository. <https://doi.org/10.24432/C5BW33>, licensed under Creative Commons Attribution 4.0 International (CC BY 4.0). The dataset is not included in this repository. It is downloaded from the UCI Machine Learning Repository by `scripts/download_uci_online_retail.py`. The committed files in `docs/real_world/` (including `docs/real_world/rolling/`) are summaries and evaluation results derived from it, with this attribution.
+
+**BasketWise's own licence.** The author decided not to add an open-source licence: all rights are reserved, so the public code may be read but not reused without permission. The dataset's licence does not change this.
+
+### Multi-cutoff check and continuous integration (November 2026)
+
+In a further AI-assisted session (Claude Code), at the author's request, the assistant added the multi-cutoff evaluation (`market_basket/rolling.py`, the `uci-rolling` command, a read-only results panel in the Evaluation Lab, tests and documentation) and a GitHub Actions workflow that runs the test suite. The protocol was written into `docs/PRODUCT_DECISIONS.md` (decision 25) before the evaluation was first run on the real data. The author chose to run this check before merging the real-world validation, decided on the licence, and authorised the merge.

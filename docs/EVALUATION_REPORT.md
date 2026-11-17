@@ -71,7 +71,7 @@ The numbers in brackets are the standard deviation across splits, in percentage 
 
 1. **The data is synthetic and its associations were planted.** The generator builds baskets from shopping missions such as "pasta night" (Pasta, then Pasta Sauce 60 % of the time). Rules recovering these patterns shows that the pipeline works; it does not show that real stores have patterns this strong. Real retail data is noisier, so the gap to best sellers may be much smaller or even reversed.
 2. **Offline hit rate is not business impact.** A hit means the suggestion matched something the customer bought anyway. A recommendation creates value only if it causes an extra purchase, and offline data cannot measure that.
-3. **The split is random, not by time.** In practice, rules learned from past months are used on future months, and preferences change (seasonality, new products).
+3. **The split is random, not by time.** In practice, rules learned from past months are used on future months, and preferences change (seasonality, new products). A separate time-based check on real data is described below.
 4. **Each basket contributes several cases.** The cases within one split are not independent. The spread across splits is the more honest guide to variability.
 5. **The defaults were chosen on this same data.** Within one run, the test transactions are never used to build recommendations. However, BasketWise's default ranking (confidence) and thresholds were chosen after looking at results like these on the demo data, so the default method's lead over the other rule methods is slightly optimistic. The effect is small next to the 20-point gap to the baseline, but this is not a fully held-out test. A clean check would fix the settings first and then evaluate on new data, such as a later time period.
 
@@ -84,3 +84,14 @@ The numbers in brackets are the standard deviation across splits, in percentage 
    - Guardrails: checkout time, and complaints or returns.
 3. **Run long enough.** Cover full weekly cycles, with a sample size calculated from the smallest effect worth acting on.
 4. **Compare.** Use a confidence interval for the difference, and check for novelty effects before rolling out.
+
+## Real-world chronological validation (separate experiment)
+
+The results above use the synthetic demo data and random splits. A separate experiment, documented in [REAL_WORLD_VALIDATION.md](REAL_WORLD_VALIDATION.md), evaluates the same recommender on the public UCI Online Retail dataset with a split by time:
+- The training period is December 2010 to 25 October 2011.
+- The test period is 26 October to 9 December 2011.
+- The thresholds were chosen on a validation period inside the training period.
+
+On the test period, Hit Rate@3 was 7.6 % for the association-rule recommender (confidence + best-seller fallback) against 1.1 % for best sellers, on the same 116,322 leave-one-out cases.
+
+The two experiments differ in data, catalogue size (47 versus 3,797 products), split and settings. Their numbers must not be combined, averaged or compared as one benchmark. The synthetic results in this document are unchanged.

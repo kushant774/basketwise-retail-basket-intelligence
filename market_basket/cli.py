@@ -5,10 +5,12 @@ import argparse
 import contextlib
 import math
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
 
+from . import real_world, rolling, uci
 from .config import ALGORITHMS, DEMO_DATA_PATH, RECOMMENDATION_RANK_METRICS, RULE_RANK_METRICS, MiningConfig
 from .data import (
     DataValidationError,
@@ -151,6 +153,74 @@ def cmd_report(args, data) -> None:
     print(f"Wrote {out / 'report.md'} and {out / 'basketwise_export.zip'}")
 
 
+def _share(text: str) -> float:
+    value = _finite_float(text)
+    if not 0 < value < 1:
+        raise argparse.ArgumentTypeError(f"must be between 0 and 1 (exclusive), got {text!r}")
+    return value
+
+
+def _date(text: str) -> str:
+    try:
+        return pd.Timestamp(datetime.strptime(text, "%Y-%m-%d")).isoformat()
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(f"not a date in the form YYYY-MM-DD: {text!r}") from error
+
+
+def _print_preparation(source) -> None:
+    quality, summary = source.quality, source.prepared.summary
+    print(f"\nData quality ({source.file_name}): {quality['rows']:,} rows, {quality['invoices']['total']:,} invoices "
+          f"({quality['invoices']['cancellation_invoices']:,} cancellations), "
+          f"{quality['customers']['unique_customer_ids']:,} customers, {quality['dates']['first']} to "
+          f"{quality['dates']['last']}")
+    print(_table(uci.preprocessing_table(source.prepared)))
+    print(f"Median products per invoice: {summary['median_products_per_invoice']:g}")
+
+
+def cmd_uci_prepare(args, _data) -> None:
+    source = real_world.prepare(args.data, args.require_customer_id)
+    _print_preparation(source)
+    for path in real_world.write_preparation_outputs(source, args.output_dir):
+        print(f"wrote {path}")
+
+
+def cmd_uci_evaluate(args, _data) -> None:
+    source = real_world.prepare(args.data, args.require_customer_id)
+    _print_preparation(source)
+    result = real_world.evaluate(source, cutoff=args.cutoff, test_share=args.test_share,
+                                 validation_share=args.validation_share, supports=args.min_support,
+                                 confidences=args.min_confidence, lifts=args.min_lift,
+                                 max_len=None if args.max_len == 0 else args.max_len, top_k=args.top_k,
+                                 n_bootstrap=args.bootstrap, seed=args.seed)
+    split, config, k = result.split, result.config, args.top_k
+    print(f"\nTraining {split['training']['first_invoice']} to {split['training']['last_invoice']} "
+          f"({split['training']['invoices']:,} invoices); test {split['test']['first_invoice']} to "
+          f"{split['test']['last_invoice']} ({split['test']['invoices']:,} invoices); cutoff {split['cutoff']}")
+    print(f"Thresholds used: support {config.min_support:.2%}, confidence {config.min_confidence:.0%}, lift "
+          f"{config.min_lift:g}, at most {config.max_len or 'any number of'} products per rule"
+          + (" (chosen on the validation period)" if not result.selection.empty else "")
+          + f"; {len(result.rules):,} rules from the training period")
+    columns = ["method", "cases", f"hit rate@{k}", f"precision@{k}", f"recall@{k}", "availability", "coverage"]
+    print(_table(result.summary[columns]))
+    for path in real_world.write_evaluation_outputs(source, result, args.output_dir):
+        print(f"wrote {path}")
+
+
+def cmd_uci_rolling(args, _data) -> None:
+    source = real_world.prepare(args.data, args.require_customer_id)
+    _print_preparation(source)
+    result = rolling.evaluate(source, cutoffs=args.cutoffs, min_training_months=args.min_training_months,
+                              validation_share=args.validation_share, supports=args.min_support,
+                              confidences=args.min_confidence, lifts=args.min_lift,
+                              max_len=None if args.max_len == 0 else args.max_len, top_k=args.top_k,
+                              n_bootstrap=args.bootstrap, seed=args.seed)
+    print(f"\n{len(result.folds)} folds; Hit Rate@{args.top_k} on each fold's test period")
+    print(_table(rolling.folds_table(result).drop(columns=["training invoices", "support / confidence", "rules"])))
+    print("\n" + rolling.answer(result))
+    for path in rolling.write_outputs(source, result, args.output_dir):
+        print(f"wrote {path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     data_options = argparse.ArgumentParser(add_help=False)
     data_options.add_argument("--data", default=None,
@@ -208,7 +278,69 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--output-dir", default="outputs")
     p.add_argument("--splits", type=_count(0), default=5, help="evaluation splits to include (0 to skip)")
     p.set_defaults(handler=cmd_report)
+
+    # Real-world validation on the UCI Online Retail data (download it first with
+    # scripts/download_uci_online_retail.py). These commands do not use --data's demo default.
+    p = commands.add_parser("uci-prepare", parents=[_uci_options(real_world.OUTPUT_DIR)],
+                            help="data-quality report and preprocessing summary for the UCI Online Retail data")
+    p.set_defaults(handler=cmd_uci_prepare, uses_transactions=False)
+
+    p = commands.add_parser("uci-evaluate", parents=[_uci_options(real_world.OUTPUT_DIR)],
+                            help="chronological train/test evaluation on the UCI Online Retail data")
+    split = p.add_mutually_exclusive_group()
+    split.add_argument("--cutoff", type=_date, help="first day of the test period, YYYY-MM-DD (default: the start of "
+                                                    "the day where the latest --test-share of invoices begins)")
+    split.add_argument("--test-share", type=_share, default=real_world.DEFAULT_TEST_SHARE,
+                       help="share of the latest invoices held out for testing (default %(default)s)")
+    _add_protocol_options(p)
+    p.set_defaults(handler=cmd_uci_evaluate, uses_transactions=False)
+
+    p = commands.add_parser("uci-rolling", parents=[_uci_options(rolling.OUTPUT_DIR)],
+                            help="the chronological evaluation repeated at monthly cutoffs (rolling origin)")
+    folds = p.add_mutually_exclusive_group()
+    folds.add_argument("--cutoffs", type=_date, nargs="+", metavar="YYYY-MM-DD",
+                       help="first days of the test periods (default: the first day of every month, from "
+                            "--min-training-months after the month of the first invoice)")
+    folds.add_argument("--min-training-months", type=_count(1), default=rolling.DEFAULT_MIN_TRAINING_MONTHS,
+                       help="months of data before the first cutoff (default %(default)s)")
+    _add_protocol_options(p)
+    p.set_defaults(handler=cmd_uci_rolling, uses_transactions=False)
     return parser
+
+
+def _uci_options(output_dir: Path) -> argparse.ArgumentParser:
+    """A fresh parent parser per command (argparse shares a parent's actions, so their defaults must not be
+    changed afterwards)."""
+    options = argparse.ArgumentParser(add_help=False)
+    options.add_argument("--data", default=str(uci.DEFAULT_CSV_PATH),
+                         help="the UCI Online Retail CSV written by scripts/download_uci_online_retail.py, or the "
+                              "original .xlsx (default: %(default)s)")
+    options.add_argument("--output-dir", default=str(output_dir), help="folder for the reports (default: %(default)s)")
+    options.add_argument("--require-customer-id", action="store_true",
+                         help="drop rows without a customer ID (default: keep them; a basket is an invoice)")
+    return options
+
+
+def _add_protocol_options(p: argparse.ArgumentParser) -> None:
+    """Options shared by uci-evaluate and uci-rolling."""
+    p.add_argument("--validation-share", type=_share, default=real_world.DEFAULT_VALIDATION_SHARE,
+                   help="share of the latest TRAINING invoices used to choose thresholds when several candidate "
+                        "values are given (default %(default)s)")
+    p.add_argument("--min-support", type=_finite_float, nargs="+", default=list(real_world.DEFAULT_SUPPORTS),
+                   help="one value, or several candidates to choose from on the validation period "
+                        "(default %(default)s)")
+    p.add_argument("--min-confidence", type=_finite_float, nargs="+", default=list(real_world.DEFAULT_CONFIDENCES),
+                   help="one value or several candidates (default %(default)s)")
+    p.add_argument("--min-lift", type=_finite_float, nargs="+", default=list(real_world.DEFAULT_LIFTS),
+                   help="one value or several candidates (default %(default)s)")
+    p.add_argument("--max-len", type=_count(0), default=real_world.DEFAULT_MAX_LEN,
+                   help="largest itemset size, at least 2; 0 means no limit (default %(default)s)")
+    p.add_argument("--top-k", type=_count(1), default=real_world.DEFAULT_TOP_K,
+                   help="recommendations per case, K in Hit Rate@K (default %(default)s)")
+    p.add_argument("--bootstrap", type=_count(0), default=real_world.DEFAULT_BOOTSTRAP,
+                   help="bootstrap resamples of test invoices for the intervals; 0 to skip (default %(default)s)")
+    p.add_argument("--seed", type=_count(0), default=real_world.DEFAULT_SEED,
+                   help="bootstrap seed (default %(default)s)")
 
 
 def _utf8_output() -> None:
@@ -223,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
     _utf8_output()
     args = build_parser().parse_args(argv)
     try:
-        args.handler(args, _load(args))
+        args.handler(args, _load(args) if getattr(args, "uses_transactions", True) else None)
     except (OSError, DataValidationError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2

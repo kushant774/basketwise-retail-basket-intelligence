@@ -11,3 +11,6 @@ outputs/
 *.egg-info/
 build/
 dist/
+
+# external datasets downloaded by scripts/download_uci_online_retail.py (not redistributed here)
+Data/external/

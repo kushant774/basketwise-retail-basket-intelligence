@@ -1,10 +1,15 @@
 # BasketWise — Testing report
 
-Last run on 14 November 2026 on Windows 11 with Python 3.13.14 and the versions pinned in `requirements.txt`.
+Last run on 18 November 2026 on Windows 11 with Python 3.13.14 and the versions pinned in `requirements.txt`, and by GitHub Actions on Ubuntu (see [Continuous integration](#multi-cutoff-check-and-continuous-integration-november-2026)).
 
 ## Automated tests
 
-Run with `python -m pytest`. Result: **175 passed**, with 0 failures and 0 skips (about 45–55 s). The release audit added 61 tests to the earlier 114; none of the earlier tests was removed or skipped.
+Run with `python -m pytest`. Result: **270 passed**, with 0 failures and 0 skips (about 85 s).
+- The multi-cutoff check added 23 tests to the 247 of the real-world validation.
+- Before that, the real-world validation added 72 to the 175 of the previous release, and the release audit added 61 to the earlier 114.
+- No earlier test was removed, skipped or loosened.
+
+On 18 November 2026, before any change for the multi-cutoff check, the 247 earlier tests were rerun on the feature branch: 247 passed.
 
 | File | Tests | What is covered |
 |---|---|---|
@@ -16,7 +21,7 @@ Run with `python -m pytest`. Result: **175 passed**, with 0 failures and 0 skips
 | `test_insights.py` | 8 | Popularity and categories; cross-sell pairs listed once; bundle metrics; merchandising groups; insights; every chart renders; **bundles and insights leave out ignored products**; **a pair bought together less often than chance (lift 0.83) is never offered as a bundle, and the minimum lift applies** |
 | `test_reporting.py` | 5 | Report sections and honest wording; empty results; ZIP contents; Markdown escaping |
 | `test_cli.py` | 18 | Every CLI command and clean error messages; **`recommend --exclude` and `insights --exclude` never show the ignored product**; **NaN or infinite numbers, negative counts and mining options on `summary` are usage errors**; **`--removed-output` always writes a file**; **the demo upload keeps its synthetic disclaimer**; **a folder given as data**; **too-large settings refused with a message** |
-| `test_app.py` | 24 | Streamlit interface through `streamlit.testing`: each page on demo, generated and tiny data, uploads, rule search, recommendations, evaluation, downloads. **New cross-page tests run several pages in one session with the sidebar, as in the real app:** three Applies in a row each take effect and the sidebar matches the page; a second Apply keeps the first one's settings; the basket survives visits to other pages; ignored products never appear in suggestions, bundles or the Overview insights; a refused upload's error stays visible; "Use demo data" on demo data resets nothing; the evaluation shows the settings it used; a search with no match says so |
+| `test_app.py` | 26 | Streamlit interface through `streamlit.testing`: each page on demo, generated and tiny data, uploads, rule search, recommendations, evaluation, downloads. **New cross-page tests run several pages in one session with the sidebar, as in the real app:** three Applies in a row each take effect and the sidebar matches the page; a second Apply keeps the first one's settings; the basket survives visits to other pages; ignored products never appear in suggestions, bundles or the Overview insights; a refused upload's error stays visible; "Use demo data" on demo data resets nothing; the evaluation shows the settings it used; a search with no match says so |
 
 **One existing assertion was changed.** `test_rank_rules_orders_and_validates` checked that ranked metric values are strictly in decreasing order. Rule ranking now treats values equal to 10 decimal places as ties (see `docs/ALGORITHM_EXPLANATION.md`), so the check compares the values at that tolerance. The old exact check would have required the floating-point noise this release removes.
 
@@ -57,10 +62,86 @@ Smaller fixes in the same release:
 - `_finalise` split into smaller functions
 - `requires-python` declared, indirect dependencies pinned, CSV line endings fixed with `.gitattributes`
 
+## Real-world validation (November 2026)
+
+The real-world validation was developed on the branch `feature/uci-real-world-validation`. These tests were added; none needs the real dataset or network access, because they use hand-made UCI-style rows and the synthetic generator's baskets written in the UCI layout.
+
+| File | Tests | What is covered |
+|---|---|---|
+| `test_uci.py` | 29 | **Reading:**<br>- CSV and `.xlsx` give identical text (real dates, whole numbers, empty customer IDs, £).<br>- Empty, header-only, foreign, missing and folder paths give clear errors.<br><br>**Preprocessing:**<br>- Cancellations (also with a positive quantity), returns, stock adjustments, bad-debt invoices, postage and other service codes, numeric voucher codes and zero or negative prices are never purchases.<br>- The first reason wins, with the CSV line number.<br>- Missing customer IDs are kept and counted, or dropped with the option.<br>- Missing descriptions keep the row and take the code's other name.<br>- Exact duplicates are removed and repeated lines merged (quantities added).<br>- Invalid, non-ISO and time-zoned dates are removed.<br>- Invalid prices are removed.<br>- Unicode, whitespace and lower-case codes are normalised without merging products that share a description.<br>- Empty tables and tables with no purchases are refused.<br>- The accounting identities hold.<br>- Repeated runs are reproducible.<br><br>**Quality report:** every measured count, and the time span inside invoices.<br><br>**Download (with a local fake server):**<br>- The CSV, the manifest and the checksums are written.<br>- The ZIP is reused, and `--force` downloads it again.<br>- A dropped connection is retried.<br>- An unexpected archive or a broken ZIP is refused.<br>- A changed spreadsheet gives a warning.<br>- A ZIP placed by hand is used. |
+| `test_temporal.py` | 19 | **Split:**<br>- The cutoff is a midnight chosen by invoice count.<br>- No date leaks across the cutoff, and identical timestamps stay together.<br>- Impossible splits give clear errors.<br><br>**Leakage:**<br>- Mining and popularity receive exactly the early-training invoices during selection, and the training invoices afterwards; this is recorded with a monkeypatch.<br>- Best sellers come from the training period.<br>- Products first sold in the test period are misses for every method.<br><br>**Cases and metrics:**<br>- A hand-checked leave-one-out example, including empty-recommendation cases.<br>- Precision@K = Hit Rate@K / K, and Recall@K = Hit Rate@K.<br>- Every method is scored on the same cases.<br>- `Recommender.for_basket` gives exactly the same recommendations as the full recommender on 300 demo baskets.<br><br>**Selection and errors:**<br>- No evaluable test invoice gives a clear error, and invalid settings are refused.<br>- Selection is deterministic, including ties.<br>- Settings refused by the safety limit are reported.<br>- Validation-period errors name the validation period.<br>- A setting refused on the whole training period falls back to the next best.<br><br>**Reproducibility and intervals:**<br>- Results are reproducible.<br>- The bootstrap intervals are paired and contain the estimate. |
+| `test_real_world.py` | 22 | **CLI:**<br>- `uci-prepare` and `uci-evaluate` write every file with consistent numbers, and no customer IDs in exports.<br>- Two runs are identical apart from the generation time.<br>- A fixed cutoff and single thresholds skip selection.<br>- Invalid options are usage errors, invalid settings give clear errors, and a missing dataset explains the download.<br><br>**Report and exports:**<br>- The ZIP export holds every file.<br>- The report has all ten sections, the attribution and the honest wording.<br>- The "fixed protocol" claim is made only for the official file with every default (including seed, bootstrap and the customer-ID option).<br>- The limitations match the run.<br><br>**Synthetic benchmark:** still 0.1971 / 0.4348 (Hit Rate@3), and 265 itemsets / 262 rules. |
+| `test_app.py` (2 new) | 2 | **Evaluation Lab:**<br>- It has two tabs, and the random-split benchmark still runs.<br>- A missing dataset shows the download command.<br><br>**Real-world tab:**<br>- Nothing runs before a click.<br>- It loads, shows the quality summary, runs, shows the comparison and the limitations, and offers three downloads.<br>- A fixed start date without a date gives a clear message. |
+
+**Independent review.** Before the real test period was scored, a separate review agent audited the new code. It did not see the author's conclusions. It was told not to compute any metric on the real test period.
+- **What it confirmed:**
+  - no leakage, the same cases for every method, and correct metrics and bootstrap;
+  - `for_basket` is exactly equivalent to the full recommender;
+  - the preprocessing accounting holds on the real file;
+  - the synthetic benchmark is unchanged.
+- **What it found:** eight smaller defects, all fixed with regression tests above.
+  - The "fixed protocol" sentence ignored the seed, the bootstrap count, the customer-ID option and the file.
+  - Two limitation sentences were wrong for some runs.
+  - Validation errors named the test period.
+  - A chosen setting could be refused on the full training period.
+  - A few report sentences were hard-coded.
+  - Time-zoned dates crashed the app tab.
+  - One £100 gift voucher had a numeric code and was kept as merchandise.
+
+**Runs on the real data** (official file, SHA-256 of the spreadsheet `43465a06…`):
+- `scripts/download_uci_online_retail.py` downloaded 541,909 rows; its retry logic recovered from one dropped connection.
+- `uci-evaluate` with the defaults scored the real test period for the first time after the protocol, the threshold grid and K were fixed.
+- After the review fixes, only report wording and formatting changed. That changed no number, and the outputs were regenerated.
+- Two further runs gave byte-identical CSV and gzip files, and the same JSON and Markdown apart from the generation time.
+- Each run took 77–82 s with a peak of 674–681 MB of memory.
+
+**Browser check.** A development script (not part of the repository) drove headless Chrome through its DevTools protocol against `streamlit run app.py`.
+- The Evaluation Lab loaded with both tabs, and the random-split benchmark still ran.
+- The real-world tab loaded the dataset, ran the default evaluation in 72 s and showed no error text.
+- The three downloads (JSON, Markdown, ZIP) arrived.
+- The downloaded JSON and Markdown equal the CLI outputs apart from the generation time.
+- `docs/images/real_world_validation.png` was captured in this run.
+
+**Static and dependency checks.**
+- `ruff` (run from a separate environment, line length 120): no pyflakes errors, and no new findings. The same 18 style notices exist on `main`.
+- `pip check`: no broken requirements.
+- `pip-audit -r requirements.txt`: no known vulnerabilities.
+
+**Fresh clone.** The feature branch was cloned into an empty folder and checked step by step:
+1. A new Python 3.13 environment was created, and `pip install -r requirements.txt` ran in it; `pip check` was clean.
+2. `python -m pytest`: 247 passed.
+3. `evaluate --splits 5` and `rules` reproduced the synthetic benchmark (Hit Rate@3 0.1971 / 0.4348; 265 itemsets, 262 rules).
+4. `scripts/download_uci_online_retail.py` downloaded the dataset again from UCI. The ZIP, the spreadsheet and the converted CSV had the same SHA-256 as the first download.
+5. `uci-prepare` and `uci-evaluate` reproduced `docs/real_world/`. Every CSV and the scored cases are identical, and the JSON and Markdown differ only in the generation and download times.
+
+## Multi-cutoff check and continuous integration (November 2026)
+
+These tests were added on the same branch. Like the other real-world tests, they need no download.
+
+| File | Tests | What is covered |
+|---|---|---|
+| `test_rolling.py` | 22 | **Folds:**<br>- Monthly cutoffs start after the training months and stop at the last invoice; too few months is a clear error.<br>- Every later invoice is tested exactly once, every fold trains on all earlier invoices, and no fold receives an invoice from after its test month (recorded with a monkeypatch).<br>- A fold gives exactly the same result as the single-split protocol run on its own window.<br><br>**Summaries:**<br>- Pooled results weight every case once, and coverage is not pooled across different candidate universes.<br>- The early group holds only folds that end before the single-split cutoff.<br>- Verdicts follow the interval; given cutoffs are sorted, and errors name the fold.<br><br>**Command and report:**<br>- `uci-rolling` writes every file with consistent numbers and no customer IDs.<br>- Two runs are identical apart from the generation time.<br>- The report has all seven sections, the attribution and honest wording.<br>- Each command keeps its own output folder.<br>- Invalid options are usage errors.<br>- The "fixed protocol" claim needs the official file and every default.<br>- The limitations match the run: refused settings, grid edges, a short last fold, overlap with the single split. |
+| `test_app.py` (1 new) | 1 | The real-world tab shows the published multi-cutoff results without running anything, even before the dataset is downloaded, and hides the panel when the file is missing. |
+
+**Protocol order.**
+1. The protocol and its summaries were added to `docs/PRODUCT_DECISIONS.md` (decision 25) before the code was written.
+2. The code was tested on synthetic UCI-style data only.
+3. `uci-rolling` was then run on the real file.
+4. While that first run was in progress, two report sentences were reworded, before any of its results had been seen. After it finished, two limitation notes were added: settings refused by the safety limit (folds 1 to 3), and the chosen support at the edge of the grid (folds 4 to 10). No setting or number changed.
+5. The run was repeated with the final code, and its output is what `docs/real_world/rolling/` holds.
+
+**Runs on the real data** (official file, spreadsheet SHA-256 `43465a06…`):
+- The two runs took 8 min 38 s and 8 min 18 s.
+- Their `rolling_folds.csv`, `rolling_pooled_summary.csv`, `rolling_threshold_selection.csv` and `rolling_cases.csv.gz` are byte-identical.
+- Their JSON files differ only in the generation time and the limitation notes added in between.
+
+**Continuous integration.** `.github/workflows/tests.yml` runs on every pull request and every push to `main`. It installs `requirements.txt` on Ubuntu with Python 3.13, runs `pip check`, and then runs `python -m pytest`.
+
 ## Static checks
 
 `ruff` (run from a separate environment, line length 120):
 - **No pyflakes errors**: no unused imports and no undefined names.
+- **Multi-cutoff check (ruff 0.17.5):** the new files have no findings. Each changed file has exactly as many findings as on the branch before the change.
 - The remaining notices are style preferences of ruff's newer default rules, such as `dict()` calls and implicit string concatenation. They were deliberately left alone, along with long lines in older files and the complexity of `generate_transactions`. Restructuring the generator could change its random stream and therefore the published datasets.
 
 ## Browser verification
@@ -93,6 +174,6 @@ These steps were run on a fresh copy of exactly the files Git would publish (65 
 
 - Operating systems other than Windows, and Python versions other than 3.13 (the dependencies need 3.12 or newer).
 - Uploads close to the 50 MB limit in a real browser. The size and row limits are unit-tested with lowered limits, and a 30,000-transaction upload is tested.
-- Real retail exports: no real data was available. UCI-style rows are tested, but the full UCI Online Retail dataset was not run.
+- Real retail exports other than the UCI Online Retail dataset. The full UCI dataset is now run (see above), but it is one retailer's data, and no other real export was available.
 - Accessibility (keyboard-only use, screen readers), mobile layouts, and several users at the same time.
 - Long-running use: cached results stay in server memory for the lifetime of the process.

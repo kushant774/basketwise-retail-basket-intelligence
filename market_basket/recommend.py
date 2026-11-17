@@ -8,6 +8,7 @@ labelled as such. Excluded products are never recommended, by a rule or as a bes
 """
 from __future__ import annotations
 
+import copy
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -54,6 +55,18 @@ class Recommender:
         self._rules = entries
         best_sellers = best_sellers if best_sellers is not None else pd.Series(dtype=float)
         self.best_sellers = best_sellers[~best_sellers.index.isin(list(self.exclude))]
+
+    def for_basket(self, basket: Iterable[str]) -> Recommender:
+        """A copy that keeps only the rules whose left-hand side lies inside `basket`.
+
+        A rule can only apply to a query when its left-hand side is inside the query, so for every
+        query that is a subset of `basket` the copy returns exactly what this recommender returns.
+        Leave-one-out evaluation uses it to filter the rules once per basket instead of once per
+        hidden product."""
+        items = frozenset((basket,) if isinstance(basket, str) else basket)
+        restricted = copy.copy(self)
+        restricted._rules = [rule for rule in self._rules if rule[0] <= items]
+        return restricted
 
     def recommend(self, basket: Iterable[str], top_n: int = 5) -> list[Recommendation]:
         if top_n < 1:

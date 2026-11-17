@@ -100,6 +100,12 @@ Every rule-based method beat the baseline in 5 of 5 splits.
 
 **Say:** "Rules and best sellers are learned from the training split only. In each test basket we hide one product and check whether it appears in the top suggestions. Rules clearly beat best sellers here, but the data is synthetic with planted patterns, the default settings were tuned on this kind of data, and offline hit rate is not extra sales. An A/B test would be needed to measure business impact."
 
+**Optional, real data (2 minutes):** first run `python scripts/download_uci_online_retail.py` once, before the demo. Then open the tab **Real-world validation (UCI data, split by time)**, click **Load and check the dataset**, and click **Run chronological evaluation** with the defaults. The run takes about 70 seconds.
+
+**You will see:** 19,773 valid invoices after cleaning. On the test period (26 October to 9 December 2011), Hit Rate@3 is 7.6 % for the association-rule recommender against 1.1 % for best sellers, on the same 116,322 cases.
+
+**Say:** "This is a separate experiment on real data, split by time: rules learned only from earlier invoices are tested on later ones. The rules still beat best sellers clearly, but both numbers are low on a 3,800-product catalogue, and the rules' hit rate fell week by week. That is evidence for basket completion on one retailer's data, not for extra sales."
+
 ## 8. Settings & Data — share the results (30 s)
 
 **Do:** use the sidebar to open **Settings & Data**, then download the Markdown report and the ZIP.

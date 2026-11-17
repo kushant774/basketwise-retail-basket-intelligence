@@ -151,3 +151,39 @@ Only sets whose `lift vs independence` is above 1 and at least the minimum lift 
 | `coverage` | Share of training products (other than ignored products) that the method recommended at least once |
 | `hit rate@k std` | Standard deviation across splits |
 | `splits beating baseline@k` | Number of splits in which the method's hit rate was above the best-seller baseline |
+
+## Real-world dataset: UCI Online Retail (not stored in this repository)
+
+Chen, D. (2015). *Online Retail* [Dataset]. UCI Machine Learning Repository. <https://doi.org/10.24432/C5BW33>. Licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode). UCI describes it as all transactions between 1 December 2010 and 9 December 2011 of a UK-based, non-store online retailer that mainly sells all-occasion gifts; many of its customers are wholesalers.
+
+`python scripts/download_uci_online_retail.py` downloads the official ZIP into `Data/external/uci_online_retail/` (ignored by Git) and writes:
+- `online_retail.zip` — the official download, kept so the script never downloads it twice (`--force` downloads it again)
+- `Online Retail.xlsx` — the spreadsheet inside the ZIP
+- `online_retail.csv` — the same eight columns as UTF-8 text; spreadsheet dates are written as `yyyy-mm-dd hh:mm:ss` (they are real dates in the spreadsheet, so no day/month guessing is involved), whole numbers without a decimal part, and empty cells as empty fields
+- `download_manifest.json` — source page, download URL, DOI, citation, licence, retrieval time (UTC), and the size and SHA-256 of each file
+
+| Column | Meaning (from the UCI page) | How BasketWise uses it |
+|---|---|---|
+| `InvoiceNo` | Six-digit invoice number; a leading `C` marks a cancellation | Basket ID. `C…` invoices and other letter-prefixed invoices (`A…`, bad-debt adjustments) are removed |
+| `StockCode` | Product code | Product ID, trimmed and in upper case (`85123a` and `85123A` are one product). Service and accounting codes are removed: `POST`, `DOT`, `C2`, `23444` (postage and carriage), `M` (manual), `D` (discount), `S` (samples), `B` (bad debt), `BANK CHARGES`, `AMAZONFEE`, `CRUK`, and `GIFT_0001_*` vouchers |
+| `Description` | Product name | Display name only: the most frequent description of each stock code. Labels add the code, such as `WHITE HANGING HEART T-LIGHT HOLDER (85123A)`, because some descriptions belong to several codes |
+| `Quantity` | Units per line | Zero or negative quantities are removed (returns and stock adjustments). Repeated lines of a product in one invoice are merged and their quantities added |
+| `InvoiceDate` | Date and time of the invoice | Must be an ISO date-time; anything else is removed as an invalid date. An invoice's time is its earliest line |
+| `UnitPrice` | Price per unit in sterling | Missing, zero or negative prices are removed |
+| `CustomerID` | Five-digit customer number | Kept when missing (a basket is an invoice); `--require-customer-id` drops such rows instead |
+| `Country` | Customer's country | Reported in the data-quality summary only |
+
+### Real-world validation outputs (`outputs/real_world/`)
+
+| File | Contents |
+|---|---|
+| `data_quality_report.json` | Counts measured on the raw table: missing values, duplicates, cancellations, negative quantities, invalid dates and prices, codes and descriptions, customers, countries, invoices per month |
+| `preprocessing_summary.csv` | `step`, `count`: original rows, rows removed for each reason, valid purchase rows, duplicates and merges, basket lines, invoices, products and customers |
+| `removed_rows.csv.gz` | Every removed raw row (`file_row` is its line number in the CSV) with the first reason that applies. Customer IDs are not included |
+| `real_world_evaluation.json` | Source, provenance (SHA-256 of the file used), preprocessing, split, settings, threshold selection, metrics per method with 95 % intervals, weekly results, limitations and software versions |
+| `real_world_evaluation.md` | The human-readable report generated from the same results |
+| `evaluation_summary.csv` | One row per method: `cases`, `invoices`, `customers`, `hit rate@K`, `precision@K`, `recall@K`, `availability`, `coverage`, `invoice-averaged hit rate@K`, and the hit rate on cases whose hidden product was sold in training |
+| `weekly_results.csv` | Hit Rate@K of every method per test week |
+| `threshold_selection.csv` | Each candidate setting with its rule count and validation scores, and which one was chosen |
+| `training_rules.csv` | Every rule learned from the training period, with product labels |
+| `evaluation_cases.csv.gz` | One row per leave-one-out case: invoice, time, hidden product, whether it was sold in training, and for each method the rank of the hidden product in the top K (0 = not found) and how many products were suggested |

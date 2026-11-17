@@ -1,0 +1,661 @@
+{
+  "title": "BasketWise real-world chronological validation (UCI Online Retail)",
+  "generated_utc": "2026-11-14T06:03:33+00:00",
+  "basketwise_version": "1.2.0",
+  "question": "When part of a later invoice is known, do association rules learned only from earlier invoices suggest the invoice's remaining product more often than simply suggesting best sellers?",
+  "not_measured": [
+    "next-purchase or next-order prediction (the hidden product comes from the same invoice)",
+    "extra sales, revenue or any causal effect of showing recommendations (that needs an A/B test)",
+    "real customer adoption (no recommendation was shown to any customer)",
+    "how other shops or other periods would behave (the data comes from one online retailer)"
+  ],
+  "dataset": {
+    "name": "Online Retail",
+    "source_page": "https://archive.ics.uci.edu/dataset/352/online+retail",
+    "download_url": "https://archive.ics.uci.edu/static/public/352/online+retail.zip",
+    "doi": "https://doi.org/10.24432/C5BW33",
+    "citation": "Chen, D. (2015). Online Retail [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5BW33.",
+    "licence": "Creative Commons Attribution 4.0 International (CC BY 4.0)",
+    "licence_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+    "retrieved_utc": "2026-11-14T05:10:06+00:00",
+    "file": "online_retail.csv",
+    "file_sha256": "7615e19743f2c3e8e641375743c276dbb0ed64a70cf210464ce72c335db3d221",
+    "official_spreadsheet_sha256": "43465a06f2ccf7c8b5bd2892bc7defb52f97487934fe93b16ae4c3936424676d",
+    "same_file_as_published_results": true,
+    "rows": 541909
+  },
+  "data_quality": {
+    "rows": 541909,
+    "columns": [
+      "InvoiceNo",
+      "StockCode",
+      "Description",
+      "Quantity",
+      "InvoiceDate",
+      "UnitPrice",
+      "CustomerID",
+      "Country"
+    ],
+    "missing_values": {
+      "InvoiceNo": 0,
+      "StockCode": 0,
+      "Description": 1501,
+      "Quantity": 0,
+      "InvoiceDate": 0,
+      "UnitPrice": 0,
+      "CustomerID": 135080,
+      "Country": 0
+    },
+    "exact_duplicate_rows": 5268,
+    "invoices": {
+      "total": 25900,
+      "cancellation_invoices": 3836,
+      "other_non_numeric_invoices": 3,
+      "other_non_numeric_examples": [
+        "A563185",
+        "A563186",
+        "A563187"
+      ],
+      "regular_invoices": 22061,
+      "regular_invoices_with_several_timestamps": 42,
+      "longest_time_span_within_an_invoice_minutes": 1.0,
+      "regular_invoices_per_month": {
+        "2010-12": 1699,
+        "2011-01": 1216,
+        "2011-02": 1174,
+        "2011-03": 1665,
+        "2011-04": 1504,
+        "2011-05": 1848,
+        "2011-06": 1683,
+        "2011-07": 1657,
+        "2011-08": 1456,
+        "2011-09": 1994,
+        "2011-10": 2275,
+        "2011-11": 3021,
+        "2011-12": 869
+      }
+    },
+    "cancellations": {
+      "rows": 9288,
+      "rows_with_negative_quantity": 9288,
+      "rows_with_positive_quantity": 0
+    },
+    "quantity": {
+      "unreadable_rows": 0,
+      "negative_rows": 10624,
+      "negative_rows_outside_cancellations": 1336,
+      "zero_rows": 0
+    },
+    "unit_price": {
+      "unreadable_rows": 0,
+      "zero_rows": 2515,
+      "negative_rows": 2,
+      "zero_price_rows_with_customer_id": 40,
+      "minimum": -11062.06,
+      "maximum": 38970.0
+    },
+    "dates": {
+      "invalid_or_missing_rows": 0,
+      "first": "2010-12-01T08:26:00",
+      "last": "2011-12-09T12:50:00",
+      "days_with_invoices": 305
+    },
+    "products": {
+      "stock_codes": 4070,
+      "stock_codes_ignoring_case": 3958,
+      "rows_with_lower_case_stock_code": 1977,
+      "lower_case_stock_codes": 117,
+      "lower_case_stock_codes_with_upper_case_twin": 112,
+      "lower_case_twins_sharing_a_description": 110,
+      "descriptions": 4202,
+      "stock_codes_with_several_descriptions": 612,
+      "descriptions_shared_by_several_stock_codes": 68,
+      "non_merchandise_rows": 3028,
+      "non_merchandise_rows_by_code": {
+        "POST": 1256,
+        "DOT": 710,
+        "M": 572,
+        "C2": 144,
+        "23444": 81,
+        "D": 77,
+        "S": 63,
+        "BANK CHARGES": 37,
+        "AMAZONFEE": 34,
+        "CRUK": 16,
+        "GIFT_0001_20": 10,
+        "GIFT_0001_10": 9,
+        "GIFT_0001_30": 8,
+        "GIFT_0001_50": 4,
+        "GIFT_0001_40": 3,
+        "B": 3,
+        "22016": 1
+      }
+    },
+    "descriptions": {
+      "missing_rows": 1501,
+      "note_like_rows": 1377,
+      "note_like_examples": [
+        "Manual",
+        "check",
+        "Next Day Carriage",
+        "Discount",
+        "damages",
+        "damaged",
+        "Bank Charges",
+        "found",
+        "sold as set on dotcom",
+        "adjustment"
+      ],
+      "descriptions_with_non_ascii_characters": 6
+    },
+    "customers": {
+      "unique_customer_ids": 4372,
+      "rows_without_customer_id": 135080,
+      "regular_invoices_without_customer_id": 3525
+    },
+    "countries": {
+      "count": 38,
+      "top_10_by_rows": {
+        "United Kingdom": 495478,
+        "Germany": 9495,
+        "France": 8557,
+        "EIRE": 8196,
+        "Spain": 2533,
+        "Netherlands": 2371,
+        "Belgium": 2069,
+        "Switzerland": 2002,
+        "Portugal": 1519,
+        "Australia": 1259
+      }
+    }
+  },
+  "preprocessing": {
+    "original_rows": 541909,
+    "removed_by_reason": {
+      "missing invoice number": 0,
+      "cancellation invoice (invoice number starts with C)": 9288,
+      "non-sale invoice (invoice number with another letter, e.g. A = bad-debt adjustment)": 3,
+      "missing or invalid invoice date": 0,
+      "missing stock code": 0,
+      "non-merchandise line (postage, carriage, fees, discounts, manual entries, samples, vouchers)": 2440,
+      "missing, zero or negative quantity (return or stock adjustment)": 1336,
+      "missing, zero or negative unit price": 1161,
+      "exact duplicate of an earlier row": 5221,
+      "repeated product in the same invoice (merged into one basket line)": 5250
+    },
+    "valid_purchase_rows": 527681,
+    "basket_lines": 517210,
+    "valid_invoices": 19773,
+    "invoices_with_two_or_more_products": 18267,
+    "median_products_per_invoice": 15.0,
+    "largest_invoice_products": 1106,
+    "unique_products": 3797,
+    "unique_customers": 4334,
+    "invoices_without_customer_id": 1371,
+    "basket_lines_without_description": 0,
+    "basket_lines_with_note_like_description": 8,
+    "first_invoice": "2010-12-01T08:26:00",
+    "last_invoice": "2011-12-09T12:50:00",
+    "require_customer_id": false
+  },
+  "split": {
+    "cutoff": "2011-10-26T00:00:00",
+    "rule": "start of the day containing the first invoice of the latest 20% of invoices",
+    "training": {
+      "first_invoice": "2010-12-01T08:26:00",
+      "last_invoice": "2011-10-25T18:39:00",
+      "invoices": 15769,
+      "invoices_with_two_or_more_products": 14539
+    },
+    "test": {
+      "first_invoice": "2011-10-26T08:30:00",
+      "last_invoice": "2011-12-09T12:50:00",
+      "invoices": 4004,
+      "invoices_with_two_or_more_products": 3728
+    },
+    "test_share_of_invoices": 0.2024983563445102
+  },
+  "settings": {
+    "top_k": 3,
+    "test_share": 0.2,
+    "fixed_cutoff": null,
+    "validation_share": 0.2,
+    "candidate_settings": 9,
+    "bootstrap_resamples": 1000,
+    "seed": 42,
+    "candidate_universe": "products bought in the training period",
+    "excluded_products": [],
+    "three_product_itemsets_exceed_limit": true,
+    "candidates": {
+      "min_support": [
+        0.005,
+        0.01,
+        0.02
+      ],
+      "min_confidence": [
+        0.1,
+        0.2,
+        0.3
+      ],
+      "min_lift": [
+        1.2
+      ]
+    },
+    "chosen": {
+      "min_support": 0.005,
+      "min_confidence": 0.2,
+      "min_lift": 1.2,
+      "max_len": 2,
+      "algorithm": "FP-Growth"
+    },
+    "leave_one_out": "every product of every test invoice with two or more products is hidden once",
+    "denominator": "all leave-one-out cases of the test period, including hidden products never sold in the training period (a miss for every method)"
+  },
+  "threshold_selection": {
+    "validation": {
+      "cutoff": "2011-09-05T00:00:00",
+      "training_part": {
+        "first_invoice": "2010-12-01T08:26:00",
+        "last_invoice": "2011-09-04T16:12:00",
+        "invoices": 12581,
+        "invoices_with_two_or_more_products": 11558
+      },
+      "validation_part": {
+        "first_invoice": "2011-09-05T09:07:00",
+        "last_invoice": "2011-10-25T18:39:00",
+        "invoices": 3188,
+        "invoices_with_two_or_more_products": 2981
+      },
+      "cases": 88734,
+      "baseline hit rate@3": 0.011945815583654517,
+      "rule": "latest 20% of training invoices, from the start of that day"
+    },
+    "candidates": [
+      {
+        "min_support": 0.005,
+        "min_confidence": 0.1,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 8763,
+        "rules": 12104,
+        "validation hit rate@3": 0.09272657605878243,
+        "validation availability": 1.0,
+        "validation coverage": 0.13192090395480227,
+        "validation rank": 2,
+        "chosen": false
+      },
+      {
+        "min_support": 0.005,
+        "min_confidence": 0.2,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 8763,
+        "rules": 5948,
+        "validation hit rate@3": 0.09272657605878243,
+        "validation availability": 1.0,
+        "validation coverage": 0.13192090395480227,
+        "validation rank": 1,
+        "chosen": true
+      },
+      {
+        "min_support": 0.005,
+        "min_confidence": 0.3,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 8763,
+        "rules": 2629,
+        "validation hit rate@3": 0.09250118331192102,
+        "validation availability": 1.0,
+        "validation coverage": 0.1271186440677966,
+        "validation rank": 3,
+        "chosen": false
+      },
+      {
+        "min_support": 0.01,
+        "min_confidence": 0.1,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 1773,
+        "rules": 1931,
+        "validation hit rate@3": 0.07404151734397187,
+        "validation availability": 1.0,
+        "validation coverage": 0.059322033898305086,
+        "validation rank": 5,
+        "chosen": false
+      },
+      {
+        "min_support": 0.01,
+        "min_confidence": 0.2,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 1773,
+        "rules": 1382,
+        "validation hit rate@3": 0.07406405661865802,
+        "validation availability": 1.0,
+        "validation coverage": 0.059322033898305086,
+        "validation rank": 4,
+        "chosen": false
+      },
+      {
+        "min_support": 0.01,
+        "min_confidence": 0.3,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 1773,
+        "rules": 772,
+        "validation hit rate@3": 0.07352311402619063,
+        "validation availability": 1.0,
+        "validation coverage": 0.05706214689265537,
+        "validation rank": 6,
+        "chosen": false
+      },
+      {
+        "min_support": 0.02,
+        "min_confidence": 0.1,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 397,
+        "rules": 218,
+        "validation hit rate@3": 0.04068339080848378,
+        "validation availability": 1.0,
+        "validation coverage": 0.015819209039548022,
+        "validation rank": 7,
+        "chosen": false
+      },
+      {
+        "min_support": 0.02,
+        "min_confidence": 0.2,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 397,
+        "rules": 198,
+        "validation hit rate@3": 0.040457998061622376,
+        "validation availability": 1.0,
+        "validation coverage": 0.015254237288135594,
+        "validation rank": 8,
+        "chosen": false
+      },
+      {
+        "min_support": 0.02,
+        "min_confidence": 0.3,
+        "min_lift": 1.2,
+        "max_len": 2,
+        "status": "compared",
+        "itemsets": 397,
+        "rules": 172,
+        "validation hit rate@3": 0.039928325106498075,
+        "validation availability": 1.0,
+        "validation coverage": 0.014689265536723164,
+        "validation rank": 9,
+        "chosen": false
+      }
+    ]
+  },
+  "training_rules": {
+    "frequent_itemsets": 8290,
+    "rules": 5516,
+    "top_rules_by_confidence": [
+      {
+        "if the basket has": "HERB MARKER ROSEMARY (22917)",
+        "suggest": "HERB MARKER THYME (22916)",
+        "support": 0.012302619062717991,
+        "confidence": 0.9326923076923077,
+        "lift": 70.03630952380952
+      },
+      {
+        "if the basket has": "REGENCY TEA PLATE PINK (23172)",
+        "suggest": "REGENCY TEA PLATE GREEN (23171)",
+        "support": 0.014648994863339463,
+        "confidence": 0.9277108433734941,
+        "lift": 46.73825012510105
+      },
+      {
+        "if the basket has": "HERB MARKER THYME (22916)",
+        "suggest": "HERB MARKER ROSEMARY (22917)",
+        "support": 0.012302619062717991,
+        "confidence": 0.9238095238095239,
+        "lift": 70.03630952380952
+      },
+      {
+        "if the basket has": "HERB MARKER CHIVES (22921)",
+        "suggest": "HERB MARKER PARSLEY (22918)",
+        "support": 0.010780645570422982,
+        "confidence": 0.918918918918919,
+        "lift": 69.66554054054055
+      },
+      {
+        "if the basket has": "HERB MARKER PARSLEY (22918)",
+        "suggest": "HERB MARKER THYME (22916)",
+        "support": 0.011985541251823197,
+        "confidence": 0.9086538461538461,
+        "lift": 68.23125
+      },
+      {
+        "if the basket has": "HERB MARKER PARSLEY (22918)",
+        "suggest": "HERB MARKER MINT (22919)",
+        "support": 0.011985541251823197,
+        "confidence": 0.9086538461538461,
+        "lift": 67.27024647887325
+      },
+      {
+        "if the basket has": "HERB MARKER CHIVES (22921)",
+        "suggest": "HERB MARKER THYME (22916)",
+        "support": 0.010653814446065064,
+        "confidence": 0.9081081081081082,
+        "lift": 68.19027027027028
+      },
+      {
+        "if the basket has": "HERB MARKER CHIVES (22921)",
+        "suggest": "HERB MARKER MINT (22919)",
+        "support": 0.010590398883886106,
+        "confidence": 0.9027027027027027,
+        "lift": 66.82966628600431
+      },
+      {
+        "if the basket has": "SET/6 COLLAGE PAPER CUPS (21084)",
+        "suggest": "SET/6 COLLAGE PAPER PLATES (21090)",
+        "support": 0.00932208764030693,
+        "confidence": 0.901840490797546,
+        "lift": 74.45613978736388
+      },
+      {
+        "if the basket has": "BISCUITS SMALL BOWL LIGHT BLUE (84596L)",
+        "suggest": "SMALL DOLLY MIX DESIGN ORANGE BOWL (84596B)",
+        "support": 0.00989282769991756,
+        "confidence": 0.9017341040462428,
+        "lift": 33.77540400642565
+      }
+    ]
+  },
+  "primary_comparison": {
+    "baseline": "Best-seller baseline",
+    "recommender": "Rules by confidence + best-seller fallback",
+    "hit rate@3 difference (points)": 6.553360499303657
+  },
+  "results": [
+    {
+      "method": "Best-seller baseline",
+      "description": "The training period's best-selling products that are not already in the basket.",
+      "cases": 116322,
+      "invoices": 3728,
+      "customers": 1999,
+      "hit rate@3": 0.010797613521088014,
+      "precision@3": 0.0035992045070293377,
+      "recall@3": 0.010797613521088014,
+      "availability": 1.0,
+      "coverage": 0.021942734814021942,
+      "invoice-averaged hit rate@3": 0.013743703411261758,
+      "hit rate@3, hidden product seen in training": 0.010914241521042067,
+      "hit rate@3 95% interval": [
+        0.009772412980691318,
+        0.012254615562262837
+      ]
+    },
+    {
+      "method": "Rules ranked by confidence",
+      "description": "Association rules learned from the training period, strongest confidence first; no fallback, so some cases get fewer than K suggestions.",
+      "cases": 116322,
+      "invoices": 3728,
+      "customers": 1999,
+      "hit rate@3": 0.07627104073176183,
+      "precision@3": 0.02542368024392061,
+      "recall@3": 0.07627104073176183,
+      "availability": 0.9931311359845945,
+      "coverage": 0.12416376772812417,
+      "invoice-averaged hit rate@3": 0.12144245846983417,
+      "hit rate@3, hidden product seen in training": 0.07709486526646912,
+      "hit rate@3 95% interval": [
+        0.07134791124788932,
+        0.08139050301306286
+      ],
+      "difference vs baseline 95% interval": [
+        0.060328006646889115,
+        0.07074261943968721
+      ]
+    },
+    {
+      "method": "Rules ranked by lift",
+      "description": "The same rules, highest lift first; no fallback.",
+      "cases": 116322,
+      "invoices": 3728,
+      "customers": 1999,
+      "hit rate@3": 0.059773731538316055,
+      "precision@3": 0.01992457717943868,
+      "recall@3": 0.059773731538316055,
+      "availability": 0.9931311359845945,
+      "coverage": 0.14931763446614932,
+      "invoice-averaged hit rate@3": 0.10052161006834176,
+      "hit rate@3, hidden product seen in training": 0.06041936408901711,
+      "hit rate@3 95% interval": [
+        0.05573264444192787,
+        0.06424491615261971
+      ],
+      "difference vs baseline 95% interval": [
+        0.044286712748701884,
+        0.053851768235053527
+      ]
+    },
+    {
+      "method": "Rules by confidence + best-seller fallback",
+      "description": "BasketWise's default recommender: confidence-ranked rules, with training-period best sellers filling free slots.",
+      "cases": 116322,
+      "invoices": 3728,
+      "customers": 1999,
+      "hit rate@3": 0.07633121851412458,
+      "precision@3": 0.02544373950470819,
+      "recall@3": 0.07633121851412458,
+      "availability": 1.0,
+      "coverage": 0.12416376772812417,
+      "invoice-averaged hit rate@3": 0.12205494058714461,
+      "hit rate@3, hidden product seen in training": 0.0771556930456469,
+      "hit rate@3 95% interval": [
+        0.07140300887705242,
+        0.08145008772395107
+      ],
+      "difference vs baseline 95% interval": [
+        0.06044234879979611,
+        0.07085080407283371
+      ]
+    }
+  ],
+  "bootstrap": {
+    "resamples": 1000,
+    "level": 0.95,
+    "seed": 42,
+    "unit": "test invoice"
+  },
+  "weekly": [
+    {
+      "week starting": "2011-10-24",
+      "invoices": 338,
+      "cases": 8525,
+      "hit rate@3: Best-seller baseline": 0.008680351906158358,
+      "hit rate@3: Rules ranked by confidence": 0.09771260997067449,
+      "hit rate@3: Rules ranked by lift": 0.08269794721407625,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.0978299120234604
+    },
+    {
+      "week starting": "2011-10-31",
+      "invoices": 495,
+      "cases": 15768,
+      "hit rate@3: Best-seller baseline": 0.015854895991882292,
+      "hit rate@3: Rules ranked by confidence": 0.0747716894977169,
+      "hit rate@3: Rules ranked by lift": 0.05885337392186707,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.07483510908168442
+    },
+    {
+      "week starting": "2011-11-07",
+      "invoices": 596,
+      "cases": 18353,
+      "hit rate@3: Best-seller baseline": 0.010842913965019343,
+      "hit rate@3: Rules ranked by confidence": 0.08821446085108701,
+      "hit rate@3: Rules ranked by lift": 0.06876260011987141,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.08821446085108701
+    },
+    {
+      "week starting": "2011-11-14",
+      "invoices": 641,
+      "cases": 19978,
+      "hit rate@3: Best-seller baseline": 0.009660626689358295,
+      "hit rate@3: Rules ranked by confidence": 0.0805886475122635,
+      "hit rate@3: Rules ranked by lift": 0.06281910101111222,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.0805886475122635
+    },
+    {
+      "week starting": "2011-11-21",
+      "invoices": 571,
+      "cases": 18800,
+      "hit rate@3: Best-seller baseline": 0.009680851063829788,
+      "hit rate@3: Rules ranked by confidence": 0.06797872340425531,
+      "hit rate@3: Rules ranked by lift": 0.05452127659574468,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.06803191489361703
+    },
+    {
+      "week starting": "2011-11-28",
+      "invoices": 608,
+      "cases": 17939,
+      "hit rate@3: Best-seller baseline": 0.010424215396621885,
+      "hit rate@3: Rules ranked by confidence": 0.07765204303472881,
+      "hit rate@3: Rules ranked by lift": 0.05697084564356988,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.07770778750209041
+    },
+    {
+      "week starting": "2011-12-05",
+      "invoices": 479,
+      "cases": 16959,
+      "hit rate@3: Best-seller baseline": 0.010083141694675394,
+      "hit rate@3: Rules ranked by confidence": 0.056607111268353084,
+      "hit rate@3: Rules ranked by lift": 0.044578100123828054,
+      "hit rate@3: Rules by confidence + best-seller fallback": 0.05678400849106669
+    }
+  ],
+  "limitations": [
+    "One retailer, one split: the data covers 2010-12-01 to 2011-12-09 for one online retailer (UCI describes it as a UK-based online gift retailer with many wholesale customers), evaluated on a single chronological split. The results say nothing certain about other shops or other periods.",
+    "This is offline basket completion, not next-purchase prediction: the hidden product comes from the same invoice, and the rest of that invoice is used as context. In a live shop the order in which products are added is unknown, so less context may be available.",
+    "A hit means the suggestion matched a product the customer bought anyway. It does not show extra sales, revenue or any causal effect; that needs a controlled experiment such as an A/B test.",
+    "Large invoices contribute many cases (the largest test invoice gives 1,106 cases; the median gives 17). The invoice-averaged hit rate, which weights every invoice equally, is reported as a check.",
+    "1.1% of the test cases hide a product that was never sold in the training period. No method can suggest such a product; these cases stay in the denominator for every method.",
+    "Cancellations are removed as rows, but the data does not link a cancellation to its original order, so an order that was later cancelled still counts as a basket.",
+    "Rules have one product on each side (at most 2 products per rule). On this training period, allowing three products at the chosen support would exceed BasketWise's pre-mining safety limit of 200,000 itemsets, so longer rules were not possible with these settings.",
+    "The chosen minimum support (0.50%) is the lowest value in the grid, so a value outside the grid might have scored better on validation.",
+    "The thresholds were chosen from a small grid on a validation period at the end of the training period. Other values, longer rules or other ranking methods were not tried, so better settings may exist.",
+    "1,371 valid invoices have no customer ID. They are kept, because a basket is an invoice; customer-level questions cannot be answered with them.",
+    "The confidence intervals resample test invoices only. They do not cover changes between periods, such as seasonal peaks inside or outside the test period.",
+    "This run matches the default protocol of BasketWise 1.2.0 on the official UCI file (latest 20% of invoices as the test period, 20% of the training invoices for validation, the 3 x 3 threshold grid, at most 2 products per rule, K = 3, 1,000 bootstrap resamples with seed 42). In this project that protocol was fixed before the test period was first scored and was not changed after seeing test results (docs/PRODUCT_DECISIONS.md, decisions 20 to 22)."
+  ],
+  "software": {
+    "python": "3.13.14",
+    "pandas": "3.1.1",
+    "numpy": "2.5.4",
+    "mlxtend": "0.25.0",
+    "openpyxl": "3.1.5"
+  }
+}
