@@ -287,12 +287,15 @@ def test_use_demo_data_when_it_is_already_active_resets_nothing():
     assert "already in use" in texts(at)
 
 
-def real_world_page(path) -> AppTest:
-    """The Evaluation Lab with the real-world tab pointed at `path` (a fixture instead of the downloaded file)."""
+def real_world_page(path, rolling_path=None) -> AppTest:
+    """The Evaluation Lab with the real-world tab pointed at `path` (a fixture instead of the downloaded file)
+    and, if given, at `rolling_path` instead of the published multi-cutoff results."""
     script = ("import streamlit as st\nfrom ui import components, state\nfrom ui.views import evaluation_lab\n"
               "components.inject_css()\nstate.init()\nevaluation_lab.render()\n")
     at = AppTest.from_string(script, default_timeout=TIMEOUT)
     at.session_state["uci_path"] = str(path)
+    if rolling_path is not None:
+        at.session_state["rolling_path"] = str(rolling_path)
     return at.run()
 
 
@@ -306,6 +309,26 @@ def test_real_world_tab_explains_how_to_download_a_missing_dataset(tmp_path):
     assert "CC BY 4.0" in texts(at) and "must not be combined" in texts(at)
     labelled(at.button, "Run evaluation").click().run()   # the random-split benchmark still works beside it
     assert not at.exception and any("hit rate@3" in df.value.columns for df in at.dataframe)
+
+
+def test_real_world_tab_shows_published_multi_cutoff_results_without_running_anything(uci_csv, tmp_path):
+    from market_basket import real_world, rolling
+
+    source = real_world.prepare(uci_csv, progress=lambda _: None)
+    result = rolling.evaluate(source, supports=(0.03,), confidences=(0.2,), lifts=(1.2,), n_bootstrap=50,
+                              progress=lambda _: None)
+    published = tmp_path / "rolling_folds.csv"
+    result.folds.to_csv(published, index=False)
+    at = real_world_page(tmp_path / "missing.csv", published)      # shown even before the dataset is downloaded
+    assert not at.exception
+    assert [e.label for e in at.expander if "monthly cutoffs" in e.label] == [
+        "Results at 3 monthly cutoffs (published multi-cutoff check)"]
+    table = next(df.value for df in at.dataframe if "difference (95% interval)" in df.value.columns)
+    assert len(table) == 3 and table["test period"].iloc[0].startswith("2025-04-01 to ")
+    assert table["association-rule recommender"].tolist() == result.folds["hit rate@3: " + rolling.PRIMARY].tolist()
+    assert "uci-rolling" in texts(at) and "not independent" in texts(at)
+    at = real_world_page(tmp_path / "missing.csv", tmp_path / "not_published.csv")
+    assert not at.exception and not [e for e in at.expander if "monthly cutoffs" in e.label]
 
 
 def test_real_world_tab_loads_runs_and_exports(uci_csv):

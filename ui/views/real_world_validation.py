@@ -13,6 +13,7 @@ import pandas as pd
 import streamlit as st
 
 from market_basket import plots, real_world, uci
+from market_basket.config import PROJECT_ROOT
 from market_basket.temporal import BASELINE, PRIMARY, TemporalResult
 from ui import components as ui
 
@@ -22,9 +23,48 @@ LIFT_OPTIONS = [1.0, 1.2, 1.5, 2.0]
 SHARE_OPTIONS = [0.1, 0.15, 0.2, 0.25, 0.3]
 
 
+PUBLISHED_ROLLING = PROJECT_ROOT / "docs" / "real_world" / "rolling" / "rolling_folds.csv"
+
+
 def dataset_path() -> Path:
     """The UCI file to use: the download script's CSV unless a test or user set another path."""
     return Path(st.session_state.get("uci_path", uci.DEFAULT_CSV_PATH))
+
+
+def _published_rolling() -> None:
+    """The published multi-cutoff results (docs/real_world/rolling), shown without running anything."""
+    path = Path(st.session_state.get("rolling_path", PUBLISHED_ROLLING))
+    if not path.is_file():
+        return
+    folds = pd.read_csv(path, dtype={"cutoff": str, "test_end_exclusive": str, "test_last_invoice": str})
+    k = int(next(c for c in folds.columns if c.startswith("hit rate@")).split("@")[1].split(":")[0])
+    hr = f"hit rate@{k}"
+    clear = int((folds["verdict"] == "recommender higher").sum())
+    with st.expander(f"Results at {len(folds)} monthly cutoffs (published multi-cutoff check)",
+                     icon=":material/calendar_month:"):
+        st.markdown(
+            "The chronological evaluation repeated at the start of every month: each fold learns from every "
+            "earlier invoice, chooses its thresholds on its own validation period, and tests on the following month. "
+            f"In **{clear} of {len(folds)}** folds the 95% interval for the difference is above zero. These are the "
+            "published results in `docs/real_world/rolling/`, shown as stored; "
+            "`python -m market_basket uci-rolling` reproduces them."
+        )
+        ui.chart(plots.rolling_chart(folds, k, BASELINE, PRIMARY))
+        table = pd.DataFrame({
+            "test period": folds["cutoff"] + " to " + folds["test_last_invoice"].str[:10],
+            "test invoices": folds["test_invoices"], "cases": folds["cases"],
+            "best-seller baseline": folds[f"{hr}: {BASELINE}"],
+            "association-rule recommender": folds[f"{hr}: {PRIMARY}"],
+            "difference (95% interval)": [f"{d * 100:+.1f} ({real_world.format_points([lo, hi])})"
+                                          if pd.notna(lo) else f"{d * 100:+.1f}" for d, lo, hi in
+                                          zip(folds["difference"], folds["difference 95% low"],
+                                              folds["difference 95% high"], strict=True)],
+        })
+        st.dataframe(table, hide_index=True, width="stretch",
+                     column_config=_percent_config(table, ["best-seller baseline", "association-rule recommender"]))
+        st.caption("The folds overlap in training data and share seasons, so they are not independent tests. The "
+                   "full report, with pooled results and limitations, is `docs/real_world/rolling/"
+                   "rolling_evaluation.md`.")
 
 
 @st.cache_resource(show_spinner=False, max_entries=2)
@@ -229,6 +269,7 @@ def _results(source: real_world.PreparedSource, result: TemporalResult, source_k
 
 def render() -> None:
     _intro()
+    _published_rolling()
     path = dataset_path()
     if not path.is_file():
         st.info("The UCI Online Retail dataset has not been downloaded yet. From the project folder, run the command "

@@ -218,6 +218,22 @@ def weekly_hit_rate_chart(weekly: pd.DataFrame, top_k: int, baseline: str, prima
     return _style(fig, f"Hit Rate@{top_k} per week of the test period", height=380)
 
 
+def rolling_chart(folds: pd.DataFrame, top_k: int, baseline: str, primary: str) -> go.Figure:
+    """Hit Rate@K per fold of the multi-cutoff evaluation (one point per monthly test period)."""
+    fig = go.Figure()
+    starts = pd.to_datetime(folds["cutoff"])
+    for method, color, name in ((baseline, NEUTRAL, "Best-seller baseline"),
+                                (primary, BLUE, "Association-rule recommender")):
+        fig.add_scatter(x=starts, y=folds[f"hit rate@{top_k}: {method}"] * 100, mode="lines+markers", name=name,
+                        line={"color": color, "width": 2}, marker={"size": 7},
+                        customdata=folds[["cases", "test_invoices"]],
+                        hovertemplate="Test period from %{x|%d %b %Y}: %{y:.1f}%<br>%{customdata[0]:,} cases from "
+                                      "%{customdata[1]:,} invoices<extra>" + name + "</extra>")
+    fig.update_xaxes(dtick="M1", tickformat="%b %Y")
+    fig.update_yaxes(title_text=f"Hit Rate@{top_k} (%)", rangemode="tozero")
+    return _style(fig, f"Hit Rate@{top_k} per monthly test period", height=380)
+
+
 def evaluation_chart(summary: pd.DataFrame, ks: tuple[int, ...] = (3, 5)) -> go.Figure:
     fig = go.Figure()
     for k, color in zip(ks, (BLUE, ORANGE)):  # noqa: B905 - at most two cut-offs are charted
