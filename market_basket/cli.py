@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import real_world, uci
+from . import real_world, rolling, uci
 from .config import ALGORITHMS, DEMO_DATA_PATH, RECOMMENDATION_RANK_METRICS, RULE_RANK_METRICS, MiningConfig
 from .data import (
     DataValidationError,
@@ -206,6 +206,21 @@ def cmd_uci_evaluate(args, _data) -> None:
         print(f"wrote {path}")
 
 
+def cmd_uci_rolling(args, _data) -> None:
+    source = real_world.prepare(args.data, args.require_customer_id)
+    _print_preparation(source)
+    result = rolling.evaluate(source, cutoffs=args.cutoffs, min_training_months=args.min_training_months,
+                              validation_share=args.validation_share, supports=args.min_support,
+                              confidences=args.min_confidence, lifts=args.min_lift,
+                              max_len=None if args.max_len == 0 else args.max_len, top_k=args.top_k,
+                              n_bootstrap=args.bootstrap, seed=args.seed)
+    print(f"\n{len(result.folds)} folds; Hit Rate@{args.top_k} on each fold's test period")
+    print(_table(rolling.folds_table(result).drop(columns=["training invoices", "support / confidence", "rules"])))
+    print("\n" + rolling.answer(result))
+    for path in rolling.write_outputs(source, result, args.output_dir):
+        print(f"wrote {path}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     data_options = argparse.ArgumentParser(add_help=False)
     data_options.add_argument("--data", default=None,
@@ -266,26 +281,48 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Real-world validation on the UCI Online Retail data (download it first with
     # scripts/download_uci_online_retail.py). These commands do not use --data's demo default.
-    uci_options = argparse.ArgumentParser(add_help=False)
-    uci_options.add_argument("--data", default=str(uci.DEFAULT_CSV_PATH),
-                             help="the UCI Online Retail CSV written by scripts/download_uci_online_retail.py, or the "
-                                  "original .xlsx (default: %(default)s)")
-    uci_options.add_argument("--output-dir", default=str(real_world.OUTPUT_DIR),
-                             help="folder for the reports (default: %(default)s)")
-    uci_options.add_argument("--require-customer-id", action="store_true",
-                             help="drop rows without a customer ID (default: keep them; a basket is an invoice)")
-
-    p = commands.add_parser("uci-prepare", parents=[uci_options],
+    p = commands.add_parser("uci-prepare", parents=[_uci_options(real_world.OUTPUT_DIR)],
                             help="data-quality report and preprocessing summary for the UCI Online Retail data")
     p.set_defaults(handler=cmd_uci_prepare, uses_transactions=False)
 
-    p = commands.add_parser("uci-evaluate", parents=[uci_options],
+    p = commands.add_parser("uci-evaluate", parents=[_uci_options(real_world.OUTPUT_DIR)],
                             help="chronological train/test evaluation on the UCI Online Retail data")
     split = p.add_mutually_exclusive_group()
     split.add_argument("--cutoff", type=_date, help="first day of the test period, YYYY-MM-DD (default: the start of "
                                                     "the day where the latest --test-share of invoices begins)")
     split.add_argument("--test-share", type=_share, default=real_world.DEFAULT_TEST_SHARE,
                        help="share of the latest invoices held out for testing (default %(default)s)")
+    _add_protocol_options(p)
+    p.set_defaults(handler=cmd_uci_evaluate, uses_transactions=False)
+
+    p = commands.add_parser("uci-rolling", parents=[_uci_options(rolling.OUTPUT_DIR)],
+                            help="the chronological evaluation repeated at monthly cutoffs (rolling origin)")
+    folds = p.add_mutually_exclusive_group()
+    folds.add_argument("--cutoffs", type=_date, nargs="+", metavar="YYYY-MM-DD",
+                       help="first days of the test periods (default: the first day of every month, from "
+                            "--min-training-months after the month of the first invoice)")
+    folds.add_argument("--min-training-months", type=_count(1), default=rolling.DEFAULT_MIN_TRAINING_MONTHS,
+                       help="months of data before the first cutoff (default %(default)s)")
+    _add_protocol_options(p)
+    p.set_defaults(handler=cmd_uci_rolling, uses_transactions=False)
+    return parser
+
+
+def _uci_options(output_dir: Path) -> argparse.ArgumentParser:
+    """A fresh parent parser per command (argparse shares a parent's actions, so their defaults must not be
+    changed afterwards)."""
+    options = argparse.ArgumentParser(add_help=False)
+    options.add_argument("--data", default=str(uci.DEFAULT_CSV_PATH),
+                         help="the UCI Online Retail CSV written by scripts/download_uci_online_retail.py, or the "
+                              "original .xlsx (default: %(default)s)")
+    options.add_argument("--output-dir", default=str(output_dir), help="folder for the reports (default: %(default)s)")
+    options.add_argument("--require-customer-id", action="store_true",
+                         help="drop rows without a customer ID (default: keep them; a basket is an invoice)")
+    return options
+
+
+def _add_protocol_options(p: argparse.ArgumentParser) -> None:
+    """Options shared by uci-evaluate and uci-rolling."""
     p.add_argument("--validation-share", type=_share, default=real_world.DEFAULT_VALIDATION_SHARE,
                    help="share of the latest TRAINING invoices used to choose thresholds when several candidate "
                         "values are given (default %(default)s)")
@@ -304,8 +341,6 @@ def build_parser() -> argparse.ArgumentParser:
                    help="bootstrap resamples of test invoices for the intervals; 0 to skip (default %(default)s)")
     p.add_argument("--seed", type=_count(0), default=real_world.DEFAULT_SEED,
                    help="bootstrap seed (default %(default)s)")
-    p.set_defaults(handler=cmd_uci_evaluate, uses_transactions=False)
-    return parser
 
 
 def _utf8_output() -> None:
